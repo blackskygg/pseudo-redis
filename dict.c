@@ -169,6 +169,7 @@ int dict_rm(dict_t *dict, const bss_t *key)
                 target_iter.prev->next = target_iter.curr->next;
 
         destroy_entry(&target_iter);
+        dict->entry_num--;
 
         return 0;
 
