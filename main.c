@@ -5,34 +5,27 @@
 
 int main()
 {
-        bss_t* bss;
-        obj_t* obj;
-        obj_t* arr[1024];
-        dict_t *dict =  dict_create(3);
+        char s[1024];
+        size_t len;
+        bss_t* arr[1024];
 
-        bss = malloc(sizeof(bss_t) + 1024);
-        for(int i = 0; i < 1000; ++i) {
-                bss->len = sprintf(bss->str, "%dsssssssssss%d", i, i) + 1;
-                arr[i] = bss_create_obj(bss);
-        }
-        for(int i = 0; i < 1000; ++i){
-                bss->len = sprintf(bss->str, "%d", i) + 1;
-                dict_add(dict, bss, arr[i]);
+        for(int i = 0; i < 10; ++i) {
+                len = sprintf(s, "%d%d", i, i);
+                arr[i] = bss_create(s, len);
         }
 
-        for(int i = 0; i < 1000; i+=2) {
-                bss->len = sprintf(bss->str, "%d", i) + 1;
-                dict_rm(dict, bss);
+        for(int i = 0; i < 10; ++i) {
+                bss_decr(arr[i], 1);
+                arr[i] = bss_append(arr[i], "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 80);
         }
 
-        for(int i = 0; i < 1000; ++i){
-                bss->len = sprintf(bss->str, "%d", i) + 1;
-                if(NULL != (obj = dict_look_up(dict, bss)))
-                        printf("%s\n", ((bss_t *)obj->val)->str);
+        for(int i = 0; i < 10; ++i) {
+                printf("%s, %d\n", arr[i]->str, bss_count_bit(arr[i]));
         }
 
-        dict_destroy(dict);
-        free(bss);
+        for(int i = 0; i < 10; ++i) {
+                bss_destroy(arr[i]);
+        }
 
         return 0;
 }
