@@ -41,7 +41,7 @@ bss_t *bss_create(const char *data, size_t len)
                 return NULL;
 
         memcpy(bss_ptr->str, data, len);
-        bss_ptr->str[real_len] = 0;  /* bss->str is always ended with 0 */
+        bss_ptr->str[len] = 0;  /* bss->str is always ended with 0 */
         bss_ptr->len = len;
         bss_ptr->free = real_len - len;
 

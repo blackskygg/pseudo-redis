@@ -1,31 +1,37 @@
 #include "bss.h"
 #include "dict.h"
+#include "list.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+void print_entry(list_entry_t *entry)
+{
+        printf("%s\n", entry->val->str);
+}
 
 int main()
 {
         char s[1024];
         size_t len;
-        bss_t* arr[1024];
+        bss_t *bss;
+        list_entry_t *entry;
+        list_t *list = list_create();
+        list_t *list2 = list_create();
 
         for(int i = 0; i < 10; ++i) {
-                len = sprintf(s, "%d%d", i, i);
-                arr[i] = bss_create(s, len);
+                len = sprintf(s, "%dssssssssssss%d", i, i);
+                bss = bss_create(s, len);
+                entry = list_create_entry(bss);
+                list_insert_back(list, entry);
         }
 
-        for(int i = 0; i < 10; ++i) {
-                bss_decr(arr[i], 1);
-                arr[i] = bss_append(arr[i], "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 80);
-        }
+        while(!list_move_fb(list, list2));
 
-        for(int i = 0; i < 10; ++i) {
-                printf("%s, %d\n", arr[i]->str, bss_count_bit(arr[i]));
-        }
+        list_iter(list2, print_entry);
+        list_iter(list, print_entry);
 
-        for(int i = 0; i < 10; ++i) {
-                bss_destroy(arr[i]);
-        }
+        list_destroy(list);
+        list_destroy(list2);
 
         return 0;
 }
