@@ -117,6 +117,7 @@ int main()
         do {
                 size_t start, end;
 
+                printf("%s:%d> ","127.0.0.1",12345);
                 fgets(buf, BUF_SIZE, stdin);
                 len = strlen(buf);
                 buf[len-1] = 0;

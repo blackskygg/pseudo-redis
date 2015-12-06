@@ -2,10 +2,11 @@
 
 #define HASH_SEED 5381
 
+/* static functions */
 static void destroy_entry(const dict_iter_t *iter);
 static dict_iter_t _dict_look_up_hash(const dict_t *dict, uint32_t hash,
                                  const bss_t *key);
-static dict_iter_t _dict_look_up(const dict_t *dict, const bss_t *key);
+
 
 /* the op structure for objs whose type is HASH */
 static struct obj_op dict_op = {.create = dict_create_obj,
@@ -130,7 +131,7 @@ static dict_iter_t _dict_look_up_hash(const dict_t *dict, uint32_t hash,
 }
 
 /* lookup a dict_iter by key and return an iterator*/
-static dict_iter_t _dict_look_up(const dict_t *dict, const bss_t *key)
+dict_iter_t _dict_look_up(const dict_t *dict, const bss_t *key)
 {
         uint32_t hash;
 
@@ -150,9 +151,9 @@ obj_t *dict_look_up(const dict_t *dict, const bss_t *key)
 }
 
 /* remove an entry from dict,
- * and free the obj stored in the corresponding entry
+ * and WILL NOT free the obj stored in the corresponding entry
  */
-int dict_rm(dict_t *dict, const bss_t *key)
+dict_iter_t dict_rm_nf(dict_t *dict, const bss_t *key)
 {
         dict_iter_t target_iter;
         uint32_t hash;
@@ -161,15 +162,30 @@ int dict_rm(dict_t *dict, const bss_t *key)
 
         target_iter = _dict_look_up_hash(dict, hash, key);
         if(NULL == target_iter.curr)
-                return E_NOT_FOUND;
+                return target_iter;
 
         if(NULL == target_iter.prev)
                 dict->hash_tbl[hash] = target_iter.curr->next;
         else
                 target_iter.prev->next = target_iter.curr->next;
 
-        destroy_entry(&target_iter);
         dict->entry_num--;
+
+        return target_iter;
+}
+
+/* remove an entry from dict,
+ * and free the obj stored in the corresponding entry
+ */
+int dict_rm(dict_t *dict, const bss_t *key)
+{
+        dict_iter_t target_iter;
+
+        target_iter = dict_rm_nf(dict, key);
+        if(NULL == target_iter.curr)
+                return E_NOT_FOUND;
+
+        destroy_entry(&target_iter);
 
         return 0;
 
@@ -197,12 +213,7 @@ dict_entry_t *dict_entry_create(const bss_t *key, obj_t *obj)
         if(NULL == de_ptr)
                 return NULL;
 
-        de_ptr->key = bss_create(key->str, key->len);
-        if(NULL == de_ptr->key) {
-                free(de_ptr);
-                return NULL;
-        }
-
+        de_ptr->key = (bss_t *)key;
         de_ptr->val = obj;
         de_ptr->next = NULL;
 
@@ -229,8 +240,13 @@ int dict_add(dict_t *dict, const bss_t *key, obj_t *obj)
         hash = dict_get_hash(key) & dict->bit_mask;
 
         iter = _dict_look_up_hash(dict, hash, key);
-        if(NULL != iter.curr)
-                return E_KEY_EXIST;
+
+        /* if key exists, replace it with the new one*/
+        if(NULL != iter.curr) {
+                iter.curr->val->op->destroy(iter.curr->val);
+                iter.curr->val = obj;
+                return 0;
+        }
 
         if(NULL == (iter.curr = dict_entry_create(key, obj)))
                 return E_MEM_OUT;
@@ -244,6 +260,51 @@ int dict_add(dict_t *dict, const bss_t *key, obj_t *obj)
         dict->entry_num++;
 
         return 0;
+}
+
+int dict_rename(dict_t *dict, const bss_t *key, bss_t *new_key)
+{
+        dict_iter_t iter, new_iter;
+        uint32_t hash;
+
+        /* check if the original key exists */
+        iter = dict_rm_nf(dict, key);
+        if(NULL == iter.curr)
+                return E_NOT_FOUND;
+
+        /* check if new_key already exists
+         * if it dose replace it with our new key and value
+         */
+        hash = dict_get_hash(new_key) & dict->bit_mask;
+        new_iter = _dict_look_up_hash(dict, hash, new_key);
+        if(new_iter.curr != NULL) {
+                /* destroy the old, install the new */
+                bss_destroy(new_iter.curr->key);
+                new_iter.curr->key = new_key;
+                new_iter.curr->val->op->destroy(new_iter.curr->val);
+                new_iter.curr->val = iter.curr->val;
+
+                /* clean the old entry */
+                bss_destroy(iter.curr->key);
+                free(iter.curr);
+
+                return 0;
+        } else {
+                /* replace the key */
+                bss_destroy(iter.curr->key);
+                iter.curr->key = new_key;
+
+                /* insert */
+                if(NULL == new_iter.prev) {
+                        iter.curr->next = NULL;
+                        dict->hash_tbl[hash]  = iter.curr;
+                } else {
+                        iter.curr->next = new_iter.prev->next;
+                        new_iter.prev->next = iter.curr;
+                }
+
+                return  0;
+        }
 }
 
 #ifdef DICT_RESIZE

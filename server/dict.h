@@ -50,7 +50,10 @@ void dict_destroy(dict_t *dict);
 dict_entry_t *dict_entry_create(const bss_t *key, obj_t *obj);
 uint32_t dict_get_hash(const bss_t *bss);
 int dict_add(dict_t *dict, const bss_t *key, obj_t *obj);
+int dict_rename(dict_t *dict, const bss_t *key, bss_t *new_key);
 int dict_rm(dict_t *dict, const bss_t *key);
+dict_iter_t dict_rm_nf(dict_t *dict, const bss_t *key);
+dict_iter_t _dict_look_up(const dict_t *dict, const bss_t *key);
 obj_t *dict_look_up(const dict_t *dict, const bss_t *key);
 void dict_iter(const dict_t *dict, dict_callback_t func);
 

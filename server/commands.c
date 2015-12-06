@@ -1,23 +1,45 @@
 #include <endian.h>
 #include "commands.h"
 
+#define FREE_ARG(n) free(args[(n)])
+
+#define CHECK_ARGS(n) ({if(num != (n)) {                                \
+                                for(uint32_t i = 0; i < num; ++i)       \
+                                        free(args[i]);                  \
+                                return fail_reply(NUM_ARGS);            \
+                        }})
+
+#define CHECK_TYPE(obj, t) ({if((obj)->type != (t)){                    \
+                                        for(uint32_t i = 0; i < num; ++i) \
+                                                free(args[i]);            \
+                                                                          \
+                                        return fail_reply(WRONG_TYPE);}})
+
+
 CMD_PROTO(del)
 {
+        CHECK_ARGS(1);
+
+        if(0 != dict_rm(key_dict, args[0])) {
+                FREE_ARG(0);
+                return false_reply();
+        } else {
+                FREE_ARG(0);
+                return true_reply();
+        }
 }
 
 CMD_PROTO(exists)
 {
-        if(num != 1) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
-                return fail_reply(NUM_ARGS);
-        }
+        CHECK_ARGS(1);
 
-
-        if(NULL == dict_look_up(key_dict, args[0]))
+        if(NULL == dict_look_up(key_dict, args[0])) {
+                FREE_ARG(0);
                 return false_reply();
-        else
+        } else {
+                FREE_ARG(0);
                 return true_reply();
+        }
 
 }
 
@@ -27,6 +49,17 @@ CMD_PROTO(randomkey)
 
 CMD_PROTO(rename)
 {
+        CHECK_ARGS(2);
+
+        if(0 != dict_rename(key_dict, args[0], args[1])) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                return fail_reply(NO_KEY);
+        } else {
+                FREE_ARG(0);
+                return ok_reply();
+        }
+
 }
 
 CMD_PROTO(keys)
@@ -39,6 +72,37 @@ CMD_PROTO(type)
 
 CMD_PROTO(append)
 {
+        CHECK_ARGS(2);
+
+        obj_t *str_obj;
+        bss_t *bss;
+        dict_iter_t iter;
+
+        iter = _dict_look_up(key_dict, args[0]);
+
+        if(NULL == iter.curr) {
+                /* no such key..., create one */
+                str_obj = bss_create_obj(args[1]);
+                if(0 != dict_add(key_dict, args[0], str_obj)) {
+                        FREE_ARG(0);
+                        FREE_ARG(1);
+                        return fail_reply(MEM_OUT);
+                } else {
+                        bss = args[1];
+                }
+        } else {
+                str_obj = iter.curr->val;
+                CHECK_TYPE(str_obj, STRING);
+
+                bss = (bss_t *)str_obj->val;
+                bss = bss_append(bss, args[1]->str, args[1]->len);
+                str_obj = bss_create_obj(bss);
+                iter.curr->val = str_obj;
+
+                FREE_ARG(1);
+        }
+
+        return create_int_reply(bss->len);
 }
 
 CMD_PROTO(getbit)
@@ -55,24 +119,22 @@ CMD_PROTO(mget)
 
 CMD_PROTO(bitcount)
 {
-        if(num != 1) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
-                return fail_reply(NUM_ARGS);
-        }
+        CHECK_ARGS(1);
 
         obj_t *str_obj;
         size_t count;
 
         str_obj = dict_look_up(key_dict, args[0]);
-        if(NULL == str_obj)
+        if(NULL == str_obj) {
+                FREE_ARG(0);
                 return false_reply();
-        else if(STRING == str_obj->type) {
-                count = bss_count_bit((bss_t *)str_obj->val);
-                return create_int_reply(count);
-        } else {
-                return fail_reply(WRONG_TYPE);
         }
+
+        CHECK_TYPE(str_obj, STRING);
+        count = bss_count_bit((bss_t *)str_obj->val);
+
+        FREE_ARG(0);
+        return create_int_reply(count);
 
 }
 
@@ -86,64 +148,66 @@ CMD_PROTO(getrange)
 
 CMD_PROTO(incr)
 {
-        if(num != 1) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
-                return fail_reply(NUM_ARGS);
-        }
+        CHECK_ARGS(1);
 
         obj_t *str_obj;
         bss_int_t count;
 
         str_obj = dict_look_up(key_dict, args[0]);
-        if(NULL == str_obj)
+        if(NULL == str_obj) {
+                FREE_ARG(0);
                 return false_reply();
-        else if(STRING == str_obj->type) {
-                /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
-                        return fail_reply(INV_INT);
-
-                /* overflow? */
-                if(bss_incr((bss_t*)(str_obj->val), 1) != 0)
-                        return fail_reply(INV_INT);
-
-                count++;
-                return create_int_reply(count);
-        } else {
-                return fail_reply(WRONG_TYPE);
         }
 
+        CHECK_TYPE(str_obj, STRING);
+
+        /* is it a valid number? */
+        if(bss2int((bss_t*)(str_obj->val), &count) != 0) {
+                FREE_ARG(0);
+                return fail_reply(INV_INT);
+        }
+
+        /* overflow? */
+        if(bss_incr((bss_t*)(str_obj->val), 1) != 0) {
+                FREE_ARG(0);
+                return fail_reply(INV_INT);
+        }
+
+        count++;
+        FREE_ARG(0);
+        return create_int_reply(count);
 }
 
 CMD_PROTO(decr)
 {
-        if(num != 1) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
-                return fail_reply(NUM_ARGS);
-        }
+        CHECK_ARGS(1);
 
         obj_t *str_obj;
         bss_int_t count;
 
         str_obj = dict_look_up(key_dict, args[0]);
-        if(NULL == str_obj)
+        if(NULL == str_obj) {
+                FREE_ARG(0);
                 return false_reply();
-        else if(STRING == str_obj->type) {
-                /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
-                        return fail_reply(INV_INT);
-
-                /* overflow? */
-                if(bss_decr((bss_t*)(str_obj->val), 1) != 0)
-                        return fail_reply(INV_INT);
-
-                count--;
-                return create_int_reply(count);
-        } else {
-                return fail_reply(WRONG_TYPE);
         }
 
+        CHECK_TYPE(str_obj, STRING);
+
+        /* is it a valid number? */
+        if(bss2int((bss_t*)(str_obj->val), &count) != 0) {
+                FREE_ARG(0);
+                return fail_reply(INV_INT);
+        }
+
+        /* overflow? */
+        if(bss_decr((bss_t*)(str_obj->val), 1) != 0) {
+                FREE_ARG(0);
+                return fail_reply(INV_INT);
+        }
+
+        count--;
+        FREE_ARG(0);
+        return create_int_reply(count);
 }
 
 CMD_PROTO(incrby)
@@ -160,49 +224,39 @@ CMD_PROTO(msetnx)
 
 CMD_PROTO(get)
 {
-        if(num != 1) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
-                return fail_reply(NUM_ARGS);
-        }
+        CHECK_ARGS(1);
 
         obj_t *val_obj;
         size_t len;
 
         val_obj = dict_look_up(key_dict, args[0]);
         if(NULL != val_obj) {
-                if(val_obj->type != STRING)
-                        return fail_reply(WRONG_TYPE);
-
+                CHECK_TYPE(val_obj, STRING);
                 len = ((bss_t *)val_obj->val)->len + 1;
 
+                FREE_ARG(0);
                 return string_reply(((bss_t *)val_obj->val)->str, len);
         } else {
-                free(args[0]);
+                FREE_ARG(0);
                 return nil_reply();
         }
 }
 
 CMD_PROTO(set)
 {
-        if(num != 2) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
-                return fail_reply(NUM_ARGS);
-        }
+        CHECK_ARGS(2);
 
         obj_t *val_obj;
 
 
         if(NULL == (val_obj = bss_create_obj(args[1]))) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
+                FREE_ARG(0);
+                FREE_ARG(1);
                 return fail_reply(MEM_OUT);
         }
 
         if(0 != dict_add(key_dict, args[0], val_obj)) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
+                FREE_ARG(1);
                 return fail_reply(MEM_OUT);
         } else {
                 free(args[0]);
