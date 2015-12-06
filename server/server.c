@@ -115,6 +115,50 @@ int create_server_socket(unsigned short port, int nqueued)
         return fd;
 }
 
+/* ======== below are some shorthands for constructing replies ======== */
+reply_t* create_empty_reply(int type)
+{
+        reply_t *reply = malloc(sizeof(reply_t));
+        if(NULL == reply)
+                return NULL;
+
+        reply->reply_type = type;
+        reply->len = 0;
+
+        return reply;
+
+}
+
+reply_t* create_str_reply(char *s, size_t len, int type)
+{
+        reply_t *reply = malloc(sizeof(reply_t) + len);
+        if(NULL == reply)
+                return NULL;
+
+        reply->reply_type = type;
+        reply->len = len;
+        memcpy(reply->data, s, len);
+
+        return reply;
+
+}
+
+reply_t* create_int_reply(int64_t n)
+{
+        reply_t *reply = malloc(sizeof(reply_t) + sizeof(int64_t));
+        if(NULL == reply)
+                return NULL;
+
+        reply->reply_type = RPLY_INT;
+        reply->len = sizeof(int64_t);
+        n = htobe64(n);
+        memcpy(reply->data, &n, sizeof(int64_t));
+
+        return reply;
+}
+
+/* ======== above are some shorthands for constructing replies ======== */
+
 /* parse the data field in request_t, convert it into bss_ts */
 int parse_args(uint8_t *data, uint32_t len, bss_t *args[], uint32_t *ret_size)
 {
@@ -170,8 +214,10 @@ int process_request(request_t *request, reply_t **reply_ptr)
                 if(!strcasecmp(request->command, commad_tbl[i].name)) {
                         ret_val = parse_args(request->data, request->len,
                                    args, &args_len);
-                        if(0 != ret_val)
-                                return ret_val;
+                        if(0 != ret_val) {
+                                *reply_ptr = fail_reply(INV_ARG);
+                                return 0;
+                        }
 
                         /* this call itself would decide which args to use
                          * -and which args to free
@@ -182,7 +228,8 @@ int process_request(request_t *request, reply_t **reply_ptr)
                 }
         }
 
-        return E_INV_CMD;
+        *reply_ptr = fail_reply(INV_CMD);
+        return 0;
 }
 
 
@@ -225,7 +272,7 @@ void send_reply(reply_t *reply, int fd)
         write(fd, reply, sizeof(reply_t) + reply->len);
 }
 
-void send_failure(int fd, char *s)
+void send_failure(int fd)
 {
         reply_t *reply = malloc(sizeof(reply_t));
 
@@ -251,9 +298,9 @@ int process_in_data(struct epoll_event *ev)
                         if(rply_ptr)
                                 send_reply(rply_ptr, ev->data.fd);
                         else
-                                send_failure(ev->data.fd, "invalid arguments");
+                                send_failure(ev->data.fd);
                 } else {
-                        send_failure(ev->data.fd, "invalid command");
+                        send_failure(ev->data.fd);
                 }
         }
 

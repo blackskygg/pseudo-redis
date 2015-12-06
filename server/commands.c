@@ -1,3 +1,4 @@
+#include <endian.h>
 #include "commands.h"
 
 CMD_PROTO(del)
@@ -6,6 +7,18 @@ CMD_PROTO(del)
 
 CMD_PROTO(exists)
 {
+        if(num != 1) {
+                for(uint32_t i = 0; i < num; ++i)
+                        free(args[i]);
+                return fail_reply(NUM_ARGS);
+        }
+
+
+        if(NULL == dict_look_up(key_dict, args[0]))
+                return false_reply();
+        else
+                return true_reply();
+
 }
 
 CMD_PROTO(randomkey)
@@ -42,6 +55,25 @@ CMD_PROTO(mget)
 
 CMD_PROTO(bitcount)
 {
+        if(num != 1) {
+                for(uint32_t i = 0; i < num; ++i)
+                        free(args[i]);
+                return fail_reply(NUM_ARGS);
+        }
+
+        obj_t *str_obj;
+        size_t count;
+
+        str_obj = dict_look_up(key_dict, args[0]);
+        if(NULL == str_obj)
+                return false_reply();
+        else if(STRING == str_obj->type) {
+                count = bss_count_bit((bss_t *)str_obj->val);
+                return create_int_reply(count);
+        } else {
+                return fail_reply(WRONG_TYPE);
+        }
+
 }
 
 CMD_PROTO(setrange)
@@ -54,10 +86,64 @@ CMD_PROTO(getrange)
 
 CMD_PROTO(incr)
 {
+        if(num != 1) {
+                for(uint32_t i = 0; i < num; ++i)
+                        free(args[i]);
+                return fail_reply(NUM_ARGS);
+        }
+
+        obj_t *str_obj;
+        bss_int_t count;
+
+        str_obj = dict_look_up(key_dict, args[0]);
+        if(NULL == str_obj)
+                return false_reply();
+        else if(STRING == str_obj->type) {
+                /* is it a valid number? */
+                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
+                        return fail_reply(INV_INT);
+
+                /* overflow? */
+                if(bss_incr((bss_t*)(str_obj->val), 1) != 0)
+                        return fail_reply(INV_INT);
+
+                count++;
+                return create_int_reply(count);
+        } else {
+                return fail_reply(WRONG_TYPE);
+        }
+
 }
 
 CMD_PROTO(decr)
 {
+        if(num != 1) {
+                for(uint32_t i = 0; i < num; ++i)
+                        free(args[i]);
+                return fail_reply(NUM_ARGS);
+        }
+
+        obj_t *str_obj;
+        bss_int_t count;
+
+        str_obj = dict_look_up(key_dict, args[0]);
+        if(NULL == str_obj)
+                return false_reply();
+        else if(STRING == str_obj->type) {
+                /* is it a valid number? */
+                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
+                        return fail_reply(INV_INT);
+
+                /* overflow? */
+                if(bss_decr((bss_t*)(str_obj->val), 1) != 0)
+                        return fail_reply(INV_INT);
+
+                count--;
+                return create_int_reply(count);
+        } else {
+                return fail_reply(WRONG_TYPE);
+        }
+
 }
 
 CMD_PROTO(incrby)
@@ -77,31 +163,23 @@ CMD_PROTO(get)
         if(num != 1) {
                 for(uint32_t i = 0; i < num; ++i)
                         free(args[i]);
-                return NULL;
+                return fail_reply(NUM_ARGS);
         }
 
-        reply_t *reply;
         obj_t *val_obj;
         size_t len;
 
         val_obj = dict_look_up(key_dict, args[0]);
         if(NULL != val_obj) {
+                if(val_obj->type != STRING)
+                        return fail_reply(WRONG_TYPE);
+
                 len = ((bss_t *)val_obj->val)->len + 1;
-                reply =  malloc(sizeof(reply_t) + len);
 
-                if(NULL == reply) {
-                        free(args[0]);
-                        return NULL;
-                }
-
-                reply->reply_type = RPLY_STRING;
-                reply->len = len;
-                memcpy(reply->data, ((bss_t *)val_obj->val)->str, len);
-
-                return reply;
+                return string_reply(((bss_t *)val_obj->val)->str, len);
         } else {
                 free(args[0]);
-                return NULL;
+                return nil_reply();
         }
 }
 
@@ -110,38 +188,25 @@ CMD_PROTO(set)
         if(num != 2) {
                 for(uint32_t i = 0; i < num; ++i)
                         free(args[i]);
-                return NULL;
+                return fail_reply(NUM_ARGS);
         }
 
-        reply_t *reply = malloc(sizeof(reply_t));
         obj_t *val_obj;
-
-        if(NULL == reply) {
-                for(uint32_t i = 0; i < num; ++i)
-                        free(args[i]);
-                return NULL;
-        }
 
 
         if(NULL == (val_obj = bss_create_obj(args[1]))) {
                 for(uint32_t i = 0; i < num; ++i)
                         free(args[i]);
-
-                free(reply);
-                return NULL;
+                return fail_reply(MEM_OUT);
         }
 
         if(0 != dict_add(key_dict, args[0], val_obj)) {
                 for(uint32_t i = 0; i < num; ++i)
                         free(args[i]);
-
-                free(reply);
-                return NULL;
+                return fail_reply(MEM_OUT);
         } else {
                 free(args[0]);
-                reply->len = 0;
-                reply->reply_type = RPLY_OK;
-                return reply;
+                return ok_reply();
         }
 
 }

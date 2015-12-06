@@ -25,10 +25,11 @@ typedef struct request request_t;
 /* the t field in a struct tlv can be one of the followings */
 #define RPLY_COMMAND 0
 #define RPLY_OK 1
-#define RPLY_FAIL 2
-#define RPLY_INT 3
-#define RPLY_FLOAT 4
-#define RPLY_STRING 5
+#define RPLY_NIL 2
+#define RPLY_FAIL 3
+#define RPLY_INT 4
+#define RPLY_FLOAT 5
+#define RPLY_STRING 6
 
 /* reply structure */
 struct reply {
@@ -79,13 +80,19 @@ void display_reply(reply_t *reply)
 {
         switch(reply->reply_type) {
         case RPLY_OK:
-                printf("success!\n");
+                printf("OK\n");
                 break;
         case RPLY_FAIL:
-                printf("failed!\n");
+                printf("(error)%s\n", reply->data);
                 break;
         case RPLY_STRING:
-                printf("(string):%s\n", reply->data);
+                printf("\"%s\"\n", reply->data);
+                break;
+        case RPLY_INT:
+                printf("(interger)%d\n", be64toh(*(int64_t*)reply->data));
+                break;
+        case RPLY_NIL:
+                printf("(nil)\n");
                 break;
         default:
                 break;

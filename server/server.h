@@ -27,10 +27,11 @@
 /* the t field in a struct tlv can be one of the followings */
 #define RPLY_COMMAND 0
 #define RPLY_OK 1
-#define RPLY_FAIL 2
-#define RPLY_INT 3
-#define RPLY_FLOAT 4
-#define RPLY_STRING 5
+#define RPLY_NIL 2
+#define RPLY_FAIL 3
+#define RPLY_INT 4
+#define RPLY_FLOAT 5
+#define RPLY_STRING 6
 
 
 /* the internal representation of a client */
@@ -67,10 +68,32 @@ struct request {
 }__attribute__((__packed__));
 typedef struct request request_t;
 
+
+/* some exported functions */
+reply_t* create_empty_reply(int type);
+reply_t* create_str_reply(char *s, size_t len, int type);
+reply_t* create_int_reply(int64_t n);
+/* shortcuts */
+#define NUM_ARGS "ERR wrong number of arguments"
+#define INV_CMD "ERR unknown command"
+#define INV_ARG "ERR Invalid Arguments"
+#define MEM_OUT "Server Memory Out"
+#define WRONG_TYPE "WRONG TYPE"                                 \
+        "Operation against a key holding a wrong kind of value"
+#define INV_INT "ERR value is not an integer or out of range"
+
+#define fail_reply(s) create_str_reply((s), strlen(s), RPLY_FAIL)
+#define string_reply(s, len) create_str_reply((s), len, RPLY_STRING)
+#define ok_reply() create_empty_reply(RPLY_OK)
+#define nil_reply() create_empty_reply(RPLY_NIL)
+#define true_reply() create_int_reply(1)
+#define false_reply() create_int_reply(0)
+
 /* global server data */
 EXTERN dict_t *key_dict;  /* this dictionary is the MAIN dictionary holding
                            * all the keys and their data
                            */
+
 
 
 #endif /* SERVER_H_ */
