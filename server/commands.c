@@ -170,15 +170,19 @@ CMD_PROTO(setbit)
 
         iter = _dict_look_up(key_dict, args[0]);
         if(NULL == iter.curr) {
+                /* create a new key, and set its value to args[0] */
                 CHECK_NULL(bss = bss_create_empty(0));
                 if((NULL == (t_bss = bss_setbit(bss, offset, bit)))
                    || (NULL == (str_obj = bss_create_obj(t_bss)))) {
                         free(bss);
-                        FREE_ARGS(0, 3);
-                        return fail_reply(MEM_OUT);
+                        goto ERR_MEM_OUT;
                 }
 
-                dict_add(key_dict, args[0], str_obj);
+                if(0 != dict_add(key_dict, args[0], str_obj)) {
+                        free(bss);
+                        goto ERR_MEM_OUT;
+
+                }
 
                 FREE_ARG(1);
                 FREE_ARG(2);
@@ -191,15 +195,16 @@ CMD_PROTO(setbit)
                 /* we will obtain the bit first */
                 result = bss_getbit(bss, offset);
 
-                if(NULL == (t_bss = bss_setbit(bss, offset, bit))) {
-                        FREE_ARGS(0, 3);
-                        return fail_reply(MEM_OUT);
-                }
+                if(NULL == (t_bss = bss_setbit(bss, offset, bit)))
+                        goto ERR_MEM_OUT;
 
                 str_obj->val = t_bss;
 
                 return create_int_reply(result);
         }
+ERR_MEM_OUT:
+        FREE_ARGS(0, 3);
+        return fail_reply(MEM_OUT);
 
 
 }
@@ -251,37 +256,39 @@ CMD_PROTO(incr)
         if(NULL == str_obj) {
                 /* create a new entry and set it to args[1] */
                 CHECK_NULL(bss = bss_create("1", 1));
-                if(NULL == (str_obj = bss_create_obj(bss))) {
-                        free(bss);
-                        FREE_ARG(0);
-                        return fail_reply(MEM_OUT);
-                }
+                if(NULL == (str_obj = bss_create_obj(bss)))
+                        goto ERR_MEM_OUT;
 
-                if(0 != dict_add(key_dict, args[0], str_obj)) {
-                        FREE_ARGS(0, num);
-                        return fail_reply(MEM_OUT);
-                }
+                if(0 != dict_add(key_dict, args[0], str_obj))
+                        goto ERR_MEM_OUT;
 
                 return create_int_reply(1);
         } else {
                 CHECK_TYPE(str_obj, STRING);
 
                 /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0) {
-                        FREE_ARG(0);
-                        return fail_reply(INV_INT);
-                }
+                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
+                        goto ERR_INV_INT;
 
                 /* overflow? */
-                if(bss_incr((bss_t*)(str_obj->val), 1) != 0) {
-                        FREE_ARG(0);
-                        return fail_reply(INV_INT);
-                }
+                if(bss_incr((bss_t*)(str_obj->val), 1) != 0)
+                        goto ERR_INV_INT;
+
 
                 count ++;
                 FREE_ARG(0);
                 return create_int_reply(count);
         }
+
+ERR_MEM_OUT:
+        free(bss);
+        FREE_ARG(0);
+        return fail_reply(MEM_OUT);
+
+ERR_INV_INT:
+        FREE_ARG(0);
+        return fail_reply(INV_INT);
+
 }
 
 CMD_PROTO(decr)
@@ -300,13 +307,12 @@ CMD_PROTO(decr)
                 CHECK_NULL(bss = bss_create("-1", 2));
                 if(NULL == (str_obj = bss_create_obj(bss))) {
                         free(bss);
-                        FREE_ARG(0);
-                        return fail_reply(MEM_OUT);
+                        goto ERR_MEM_OUT;
                 }
 
                 if(0 != dict_add(key_dict, args[0], str_obj)) {
-                        FREE_ARGS(0, num);
-                        return fail_reply(MEM_OUT);
+                        free(bss);
+                        goto ERR_MEM_OUT;
                 }
 
                 return create_int_reply(-1);
@@ -314,21 +320,25 @@ CMD_PROTO(decr)
                 CHECK_TYPE(str_obj, STRING);
 
                 /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0) {
-                        FREE_ARG(0);
-                        return fail_reply(INV_INT);
-                }
-
+                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
+                        goto ERR_INV_INT;
                 /* overflow? */
-                if(bss_decr((bss_t*)(str_obj->val), 1) != 0) {
-                        FREE_ARG(0);
-                        return fail_reply(INV_INT);
-                }
+                if(bss_decr((bss_t*)(str_obj->val), 1) != 0)
+                        goto ERR_INV_INT;
 
                 count --;
                 FREE_ARG(0);
                 return create_int_reply(count);
         }
+
+ERR_MEM_OUT:
+        FREE_ARGS(0, num);
+        return fail_reply(MEM_OUT);
+
+ERR_INV_INT:
+        FREE_ARG(0);
+        return fail_reply(INV_INT);
+
 }
 
 CMD_PROTO(incrby)
@@ -340,11 +350,8 @@ CMD_PROTO(incrby)
         bss_int_t number;
 
         /* first check args[1] */
-        if(0 != bss2int(args[1], &number)) {
-                FREE_ARG(0);
-                FREE_ARG(1);
-                return fail_reply(INV_INT);
-        }
+        if(0 != bss2int(args[1], &number))
+                goto ERR_INV_INT;
 
         str_obj = dict_look_up(key_dict, args[0]);
 
@@ -362,24 +369,24 @@ CMD_PROTO(incrby)
                 CHECK_TYPE(str_obj, STRING);
 
                 /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0) {
-                        FREE_ARG(0);
-                        FREE_ARG(1);
-                        return fail_reply(INV_INT);
-                }
+                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
+                        goto ERR_INV_INT;
 
                 /* overflow? */
-                if(bss_incr((bss_t*)(str_obj->val), number) != 0) {
-                        FREE_ARG(0);
-                        FREE_ARG(1);
-                        return fail_reply(INV_INT);
-                }
+                if(bss_incr((bss_t*)(str_obj->val), number) != 0)
+                        goto ERR_INV_INT;
 
                 count += number;
                 FREE_ARG(0);
                 FREE_ARG(1);
                 return create_int_reply(count);
         }
+
+ERR_INV_INT:
+        FREE_ARG(0);
+        FREE_ARG(1);
+        return fail_reply(INV_INT);
+
 }
 
 CMD_PROTO(decrby)
@@ -391,11 +398,9 @@ CMD_PROTO(decrby)
         bss_int_t number;
 
         /* first check args[1] */
-        if(0 != bss2int(args[1], &number)) {
-                FREE_ARG(0);
-                FREE_ARG(1);
-                return fail_reply(INV_INT);
-        }
+        if(0 != bss2int(args[1], &number))
+                goto ERR_INV_INT;
+
 
         str_obj = dict_look_up(key_dict, args[0]);
 
@@ -418,18 +423,11 @@ CMD_PROTO(decrby)
                 CHECK_TYPE(str_obj, STRING);
 
                 /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0) {
-                        FREE_ARG(0);
-                        FREE_ARG(1);
-                        return fail_reply(INV_INT);
-                }
-
+                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
+                        goto ERR_INV_INT;
                 /* overflow? */
-                if(bss_decr((bss_t*)(str_obj->val), number) != 0) {
-                        FREE_ARG(0);
-                        FREE_ARG(1);
-                        return fail_reply(INV_INT);
-                }
+                if(bss_decr((bss_t*)(str_obj->val), number) != 0)
+                        goto ERR_INV_INT;
 
                 count -= number;
                 FREE_ARG(0);
@@ -437,6 +435,10 @@ CMD_PROTO(decrby)
                 return create_int_reply(count);
         }
 
+ERR_INV_INT:
+        FREE_ARG(0);
+        FREE_ARG(1);
+        return fail_reply(INV_INT);
 }
 
 CMD_PROTO(msetnx)
