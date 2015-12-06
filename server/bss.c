@@ -48,6 +48,24 @@ bss_t *bss_create(const char *data, size_t len)
         return bss_ptr;
 }
 
+/* create an all-0 bss of size len */
+bss_t *bss_create_empty(size_t len)
+{
+        bss_t *bss_ptr;
+
+        len = len > BSS_MIN_LEN ? len : BSS_MIN_LEN;
+
+        bss_ptr = calloc(sizeof(bss_t) + len + 1, 1);
+        if(NULL == bss_ptr)
+                return NULL;
+
+        bss_ptr->len = 0;
+        bss_ptr->free = len;
+
+        return bss_ptr;
+
+}
+
 obj_t *bss_create_obj(const void *data)
 {
         obj_t *obj_ptr;
@@ -229,4 +247,66 @@ bss_t *bss_append(bss_t *bss, char *data, size_t len)
         }
 
         return result;
+}
+
+/* get a bit from bss, if offset is out of range, return 0 */
+int bss_getbit(const bss_t *bss, size_t offset)
+{
+        size_t byte, bit;
+
+        offset++;
+        bit = offset % 8;
+        byte = offset / 8 + (bit ? 1 : 0);
+        byte--;
+
+        /* fall back to the previous byte */
+        if(0 == bit)
+                bit = 8;
+
+        if(byte + 1> bss->len)
+                return 0;
+        else
+                return bss->str[byte] & (1UL << (bit-1)) ? 1 : 0;
+}
+
+/* set a bit of bss, if offset is out of range, expand it
+ * return the result bss or NULL if memory is out
+ */
+bss_t *bss_setbit(bss_t *bss, size_t offset, uint val)
+{
+        size_t byte, bit;
+        bss_t *new_bss;
+
+        offset++;
+        bit = offset % 8;
+        byte = offset / 8 + (bit ? 1 : 0);
+        byte--;
+
+        /* fall back to the previous byte */
+        if(0 == bit)
+                bit = 8;
+
+        if(byte + 1 > bsssize(bss)) {
+                if(NULL == (new_bss = bss_create_empty(byte + 1))) {
+                        return NULL;
+                } else {
+                        bss_destroy(bss);
+
+                        new_bss->free -= byte;
+                        new_bss->len = byte;
+                        bss = new_bss;
+                }
+        } else if(byte + 1 > bss->len) {
+                memset(bss->str + bss->len, 0, bss->free);
+                bss->free = bsssize(bss) - (byte + 1);
+                bss->len = byte + 1;
+        }
+
+        if(val)
+                bss->str[byte] |= val << (bit-1);
+        else
+                bss->str[byte] &= ~(1UL << (bit-1));
+
+        return bss;
+
 }

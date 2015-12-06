@@ -118,10 +118,90 @@ CMD_PROTO(append)
 
 CMD_PROTO(getbit)
 {
+        CHECK_ARGS(2);
+
+        obj_t *str_obj;
+        bss_t *bss;
+        bss_int_t offset;
+
+        /* check the offset */
+        if(0 != bss2int(args[1], &offset)) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                return fail_reply(INV_OFFSET);
+        }
+
+        if(NULL == (str_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                return false_reply();
+        }
+
+        CHECK_TYPE(str_obj, STRING);
+        bss = str_obj->val;
+
+        return create_int_reply(bss_getbit(bss, offset));
 }
 
 CMD_PROTO(setbit)
 {
+        CHECK_ARGS(3);
+
+        dict_iter_t iter;
+        obj_t *str_obj;
+        bss_t *bss, *t_bss;
+        bss_int_t offset;
+        bss_int_t bit;
+        int result;
+
+        /* check the offset */
+        if(0 != bss2int(args[1], &offset)) {
+                FREE_ARGS(0, 3);
+                return fail_reply(INV_OFFSET);
+        }
+
+        /* check the bit */
+        if((0 != bss2int(args[2], &bit)) ||
+           (bit != 0 && bit != 1)) {
+                FREE_ARGS(0, 3);
+                return fail_reply(INV_SYNX);
+
+        }
+
+        iter = _dict_look_up(key_dict, args[0]);
+        if(NULL == iter.curr) {
+                CHECK_NULL(bss = bss_create_empty(0));
+                if((NULL == (t_bss = bss_setbit(bss, offset, bit)))
+                   || (NULL == (str_obj = bss_create_obj(t_bss)))) {
+                        free(bss);
+                        FREE_ARGS(0, 3);
+                        return fail_reply(MEM_OUT);
+                }
+
+                dict_add(key_dict, args[0], str_obj);
+
+                FREE_ARG(1);
+                FREE_ARG(2);
+                return false_reply();
+        } else {
+                str_obj = iter.curr->val;
+                CHECK_TYPE(str_obj, STRING);
+                bss = str_obj->val;
+
+                /* we will obtain the bit first */
+                result = bss_getbit(bss, offset);
+
+                if(NULL == (t_bss = bss_setbit(bss, offset, bit))) {
+                        FREE_ARGS(0, 3);
+                        return fail_reply(MEM_OUT);
+                }
+
+                str_obj->val = t_bss;
+
+                return create_int_reply(result);
+        }
+
+
 }
 
 CMD_PROTO(mget)
@@ -391,10 +471,11 @@ CMD_PROTO(set)
 
         CHECK_NULL(val_obj = bss_create_obj(args[1]));
         if(0 != dict_add(key_dict, args[0], val_obj)) {
+                FREE_ARG(0);
                 FREE_ARG(1);
                 return fail_reply(MEM_OUT);
         } else {
-                free(args[0]);
+                FREE_ARG(0);
                 return ok_reply();
         }
 

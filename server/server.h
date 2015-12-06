@@ -81,7 +81,9 @@ reply_t* create_int_reply(int64_t n);
 #define WRONG_TYPE "WRONG TYPE"                                 \
         "Operation against a key holding a wrong kind of value"
 #define INV_INT "ERR value is not an integer or out of range"
+#define INV_OFFSET "ERR bit offset is not an integer or out of range"
 #define NO_KEY "ERR no such key"
+#define INV_SYNX "ERR syntax error"
 
 #define fail_reply(s) create_str_reply((s), strlen(s) + 1, RPLY_FAIL)
 #define string_reply(s, len) create_str_reply((s), len, RPLY_STRING)

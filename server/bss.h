@@ -38,6 +38,7 @@ typedef long long  bss_int_t;
 
 /* bss "low-level" APIS */
 bss_t *bss_create(const char *data, size_t len);
+bss_t *bss_create_empty(size_t len);
 void bss_destroy(bss_t *bss);
 bss_t *bss_set(bss_t *dst, const char *str, size_t len);
 int bss_cmp(const bss_t *a, const bss_t *b);
@@ -45,6 +46,8 @@ int bss2int(const bss_t *bss, bss_int_t *result);
 int bss_add_sub(const bss_t *bss, bss_int_t num, int8_t factor);
 size_t bss_count_bit(const bss_t *bss);
 bss_t *bss_append(bss_t *bss, char *data, size_t len);
+bss_t *bss_setbit(bss_t *bss, size_t offset, uint val);
+int bss_getbit(const bss_t *bss, size_t offset);
 
 
 /* functions on the obj layer */
