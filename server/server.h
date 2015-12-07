@@ -85,7 +85,7 @@ void reset_reply_arr();
 #define INV_CMD "ERR unknown command"
 #define INV_ARG "ERR Invalid Arguments"
 #define MEM_OUT "Server Memory Out"
-#define WRONG_TYPE "WRONG TYPE"                                 \
+#define WRONG_TYPE "WRONG TYPE "                                \
         "Operation against a key holding a wrong kind of value"
 #define INV_INT "ERR value is not an integer or out of range"
 #define INV_OFFSET "ERR bit offset is not an integer or out of range"

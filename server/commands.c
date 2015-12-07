@@ -66,17 +66,13 @@ int addkey_to_arr(const dict_iter_t *dict_iter, void *dummy)
         return addto_reply_arr(dict_iter->curr->key);
 }
 
-_CMD_PROTO(keys)
+int add_key_val_to_arr(const dict_iter_t *dict_iter, void *dummy)
 {
-        CHECK_ARGS(1);
 
-        reset_reply_arr();
-        if(0 != dict_iter(dict, addkey_to_arr, NULL))
-                fail_reply(TOO_LONG);
-        else
-                arr_reply();
+        if(0 != addto_reply_arr(dict_iter->curr->key) ||
+           0 != addto_reply_arr((bss_t *)dict_iter->curr->val->val))
+                return E_TOO_LONG;
 }
-
 
 _CMD_PROTO(get)
 {
@@ -131,9 +127,16 @@ CMD_PROTO(randomkey)
 {
 }
 
+
 CMD_PROTO(keys)
 {
-        return _keys_command(key_dict, args, num);
+        CHECK_ARGS(1);
+
+        reset_reply_arr();
+        if(0 != dict_iter(key_dict, addkey_to_arr, NULL))
+                fail_reply(TOO_LONG);
+        else
+                arr_reply();
 }
 
 CMD_PROTO(rename)
@@ -615,6 +618,21 @@ CMD_PROTO(hmset)
 
 CMD_PROTO(hgetall)
 {
+        CHECK_ARGS(1);
+
+        obj_t *val_obj;
+
+        reset_reply_arr();
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0])))
+                arr_reply();
+
+        CHECK_TYPE(val_obj, HASH);
+
+        if(0 != dict_iter((dict_t *)val_obj->val, add_key_val_to_arr, NULL))
+                fail_reply(TOO_LONG);
+        else
+                arr_reply();
+
 }
 
 CMD_PROTO(hincrby)
@@ -652,6 +670,20 @@ CMD_PROTO(hsetnx)
 
 CMD_PROTO(hkeys)
 {
+        CHECK_ARGS(1);
+
+        obj_t *val_obj;
+
+        reset_reply_arr();
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0])))
+                arr_reply();
+
+        CHECK_TYPE(val_obj, HASH);
+
+        if(0 != dict_iter((dict_t *)val_obj->val, addkey_to_arr, NULL))
+                fail_reply(TOO_LONG);
+        else
+                arr_reply();
 }
 
 CMD_PROTO(havls)
