@@ -12,20 +12,26 @@
 #define CHECK_ARGS(n) ({                                        \
                         if(num != (n)) {                        \
                                 FREE_ARGS(0, num);              \
-                                return fail_reply(NUM_ARGS);    \
+                                fail_reply(NUM_ARGS);           \
                         }})
 
 #define CHECK_TYPE(obj, t) ({                                   \
                         if((obj)->type != (t)){                 \
                                 FREE_ARGS(0, num);              \
-                                return fail_reply(WRONG_TYPE);  \
+                                fail_reply(WRONG_TYPE);         \
                         }})
 
 #define CHECK_NULL(ptr) ({                                      \
                         if(NULL == (ptr)) {                     \
                                 FREE_ARGS(0, num);              \
-                                return fail_reply(MEM_OUT);     \
+                                fail_reply(MEM_OUT);            \
                         }})
+
+
+/* this command applies too ALL the functions in this file
+ * the xxx_reply() calls are actually marcros
+ * and they ALL imply a "return" statement
+ */
 
 CMD_PROTO(del)
 {
@@ -33,10 +39,10 @@ CMD_PROTO(del)
 
         if(0 != dict_rm(key_dict, args[0])) {
                 FREE_ARG(0);
-                return false_reply();
+                false_reply();
         } else {
                 FREE_ARG(0);
-                return true_reply();
+                true_reply();
         }
 }
 
@@ -46,10 +52,10 @@ CMD_PROTO(exists)
 
         if(NULL == dict_look_up(key_dict, args[0])) {
                 FREE_ARG(0);
-                return false_reply();
+                false_reply();
         } else {
                 FREE_ARG(0);
-                return true_reply();
+                true_reply();
         }
 
 }
@@ -58,6 +64,7 @@ CMD_PROTO(randomkey)
 {
 }
 
+
 CMD_PROTO(rename)
 {
         CHECK_ARGS(2);
@@ -65,16 +72,29 @@ CMD_PROTO(rename)
         if(0 != dict_rename(key_dict, args[0], args[1])) {
                 FREE_ARG(0);
                 FREE_ARG(1);
-                return fail_reply(NO_KEY);
+                fail_reply(NO_KEY);
         } else {
                 FREE_ARG(0);
-                return ok_reply();
+                ok_reply();
         }
 
 }
 
+/* helper function used by dict_iter to add keys to an array */
+int addkey_to_arr(const dict_iter_t *dict_iter, void *dummy)
+{
+        return addto_reply_arr(dict_iter->curr->key);
+}
+
 CMD_PROTO(keys)
 {
+        CHECK_ARGS(1);
+
+        reset_reply_arr();
+        if(0 != dict_iter(key_dict, addkey_to_arr, NULL))
+                fail_reply(TOO_LONG);
+        else
+                arr_reply();
 }
 
 CMD_PROTO(type)
@@ -97,7 +117,7 @@ CMD_PROTO(append)
                 if(0 != dict_add(key_dict, args[0], str_obj)) {
                         FREE_ARG(0);
                         FREE_ARG(1);
-                        return fail_reply(MEM_OUT);
+                        fail_reply(MEM_OUT);
                 } else {
                         bss = args[1];
                 }
@@ -113,7 +133,7 @@ CMD_PROTO(append)
                 FREE_ARG(1);
         }
 
-        return create_int_reply(bss->len);
+        int_reply(bss->len);
 }
 
 CMD_PROTO(getbit)
@@ -128,19 +148,19 @@ CMD_PROTO(getbit)
         if(0 != bss2int(args[1], &offset)) {
                 FREE_ARG(0);
                 FREE_ARG(1);
-                return fail_reply(INV_OFFSET);
+                fail_reply(INV_OFFSET);
         }
 
         if(NULL == (str_obj = dict_look_up(key_dict, args[0]))) {
                 FREE_ARG(0);
                 FREE_ARG(1);
-                return false_reply();
+                false_reply();
         }
 
         CHECK_TYPE(str_obj, STRING);
         bss = str_obj->val;
 
-        return create_int_reply(bss_getbit(bss, offset));
+        int_reply(bss_getbit(bss, offset));
 }
 
 CMD_PROTO(setbit)
@@ -157,14 +177,14 @@ CMD_PROTO(setbit)
         /* check the offset */
         if(0 != bss2int(args[1], &offset)) {
                 FREE_ARGS(0, 3);
-                return fail_reply(INV_OFFSET);
+                fail_reply(INV_OFFSET);
         }
 
         /* check the bit */
         if((0 != bss2int(args[2], &bit)) ||
            (bit != 0 && bit != 1)) {
                 FREE_ARGS(0, 3);
-                return fail_reply(INV_SYNX);
+                fail_reply(INV_SYNX);
 
         }
 
@@ -186,7 +206,7 @@ CMD_PROTO(setbit)
 
                 FREE_ARG(1);
                 FREE_ARG(2);
-                return false_reply();
+                false_reply();
         } else {
                 str_obj = iter.curr->val;
                 CHECK_TYPE(str_obj, STRING);
@@ -200,13 +220,12 @@ CMD_PROTO(setbit)
 
                 str_obj->val = t_bss;
 
-                return create_int_reply(result);
+                int_reply(result);
         }
+
 ERR_MEM_OUT:
         FREE_ARGS(0, 3);
-        return fail_reply(MEM_OUT);
-
-
+        fail_reply(MEM_OUT);
 }
 
 CMD_PROTO(mget)
@@ -223,14 +242,14 @@ CMD_PROTO(bitcount)
         str_obj = dict_look_up(key_dict, args[0]);
         if(NULL == str_obj) {
                 FREE_ARG(0);
-                return false_reply();
+                false_reply();
         }
 
         CHECK_TYPE(str_obj, STRING);
         count = bss_count_bit((bss_t *)str_obj->val);
 
         FREE_ARG(0);
-        return create_int_reply(count);
+        int_reply(count);
 
 }
 
@@ -262,7 +281,7 @@ CMD_PROTO(incr)
                 if(0 != dict_add(key_dict, args[0], str_obj))
                         goto ERR_MEM_OUT;
 
-                return create_int_reply(1);
+                int_reply(1);
         } else {
                 CHECK_TYPE(str_obj, STRING);
 
@@ -277,17 +296,17 @@ CMD_PROTO(incr)
 
                 count ++;
                 FREE_ARG(0);
-                return create_int_reply(count);
+                int_reply(count);
         }
 
 ERR_MEM_OUT:
         free(bss);
         FREE_ARG(0);
-        return fail_reply(MEM_OUT);
+        fail_reply(MEM_OUT);
 
 ERR_INV_INT:
         FREE_ARG(0);
-        return fail_reply(INV_INT);
+        fail_reply(INV_INT);
 
 }
 
@@ -315,7 +334,7 @@ CMD_PROTO(decr)
                         goto ERR_MEM_OUT;
                 }
 
-                return create_int_reply(-1);
+                int_reply(-1);
         } else {
                 CHECK_TYPE(str_obj, STRING);
 
@@ -328,16 +347,16 @@ CMD_PROTO(decr)
 
                 count --;
                 FREE_ARG(0);
-                return create_int_reply(count);
+                int_reply(count);
         }
 
 ERR_MEM_OUT:
         FREE_ARGS(0, num);
-        return fail_reply(MEM_OUT);
+        fail_reply(MEM_OUT);
 
 ERR_INV_INT:
         FREE_ARG(0);
-        return fail_reply(INV_INT);
+        fail_reply(INV_INT);
 
 }
 
@@ -360,11 +379,13 @@ CMD_PROTO(incrby)
                 /* create a new entry and set it to args[1] */
                 CHECK_NULL(str_obj = bss_create_obj(args[1]));
                 if(0 != dict_add(key_dict, args[0], str_obj)) {
-                        FREE_ARGS(0, num);
-                        return fail_reply(MEM_OUT);
+                        FREE_ARG(0);
+                        FREE_ARG(1);
+                        fail_reply(MEM_OUT);
                 }
 
-                return create_int_reply(number);
+                FREE_ARG(1);
+                int_reply(number);
         } else {
                 CHECK_TYPE(str_obj, STRING);
 
@@ -379,13 +400,13 @@ CMD_PROTO(incrby)
                 count += number;
                 FREE_ARG(0);
                 FREE_ARG(1);
-                return create_int_reply(count);
+                int_reply(count);
         }
 
 ERR_INV_INT:
         FREE_ARG(0);
         FREE_ARG(1);
-        return fail_reply(INV_INT);
+        fail_reply(INV_INT);
 
 }
 
@@ -415,10 +436,10 @@ CMD_PROTO(decrby)
                 if(0 != dict_add(key_dict, args[0], str_obj)) {
                         FREE_ARG(0);
                         FREE_ARG(1);
-                        return fail_reply(MEM_OUT);
+                        fail_reply(MEM_OUT);
                 }
 
-                return create_int_reply(-number);
+                int_reply(-number);
         } else {
                 CHECK_TYPE(str_obj, STRING);
 
@@ -432,13 +453,13 @@ CMD_PROTO(decrby)
                 count -= number;
                 FREE_ARG(0);
                 FREE_ARG(1);
-                return create_int_reply(count);
+                int_reply(count);
         }
 
 ERR_INV_INT:
         FREE_ARG(0);
         FREE_ARG(1);
-        return fail_reply(INV_INT);
+        fail_reply(INV_INT);
 }
 
 CMD_PROTO(msetnx)
@@ -458,10 +479,10 @@ CMD_PROTO(get)
                 len = ((bss_t *)val_obj->val)->len + 1;
 
                 FREE_ARG(0);
-                return string_reply(((bss_t *)val_obj->val)->str, len);
+                string_reply(((bss_t *)val_obj->val)->str, len);
         } else {
                 FREE_ARG(0);
-                return nil_reply();
+                nil_reply();
         }
 }
 
@@ -475,10 +496,9 @@ CMD_PROTO(set)
         if(0 != dict_add(key_dict, args[0], val_obj)) {
                 FREE_ARG(0);
                 FREE_ARG(1);
-                return fail_reply(MEM_OUT);
+                fail_reply(MEM_OUT);
         } else {
-                FREE_ARG(0);
-                return ok_reply();
+                ok_reply();
         }
 
 }
@@ -491,13 +511,13 @@ CMD_PROTO(strlen)
         bss_t *bss;
         if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
                 FREE_ARG(0);
-                return create_int_reply(0);
+                int_reply(0);
         } else {
                 CHECK_TYPE(val_obj, STRING);
 
                 bss = val_obj->val;
                 FREE_ARG(0);
-                return create_int_reply(bss->len);
+                int_reply(bss->len);
         }
 }
 

@@ -9,9 +9,10 @@
 #define E_INV_INT   -5
 #define E_INV_CMD   -6
 #define E_INV_ARGS  -7
+#define E_TOO_LONG  -8
 
-#define E_NET_ERR   -8
+#define E_NET_ERR   -9
 
-#define E_UNKNOWN   -9
+#define E_UNKNOWN   -10
 
 #endif

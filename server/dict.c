@@ -4,6 +4,7 @@
 
 /* static functions */
 static void destroy_entry(const dict_iter_t *iter);
+static int destroy_entry_callback(const dict_iter_t *iter, void *dummy);
 static dict_iter_t _dict_look_up_hash(const dict_t *dict, uint32_t hash,
                                  const bss_t *key);
 
@@ -74,11 +75,12 @@ obj_t *dict_create_obj(const void *data)
  * this function promises a safe iteration,
  *  so you can delete entries during the call
  */
-void dict_iter(const dict_t *dict, dict_callback_t func)
+int dict_iter(const dict_t *dict, dict_callback_t func, void *data)
 {
         size_t size;
         dict_iter_t iter;
         dict_entry_t *next_ent;
+        int ret_val;
         register uint32_t i;
 
         size = pwr2size(dict->power);
@@ -88,18 +90,21 @@ void dict_iter(const dict_t *dict, dict_callback_t func)
                 iter.curr = dict->hash_tbl[i];
                 while(iter.curr != NULL) {
                         next_ent = iter.curr->next;
-                        func(&iter);
+
+                        /* is it enough? */
+                        if(0 != (ret_val = func(&iter, data)))
+                                return ret_val;
+
                         iter.prev = iter.prev ? iter.prev->next : NULL;
                         iter.curr = next_ent;
                 }
 
         }
+
+        return 0;
 }
 
-/* destroy an entry pointed to by iter->curr,
- * and is alse used as a callback function for dict_iter() \
- * in function dict_destroy()
- */
+/* destroy an entry pointed to by iter->curr */
 static void destroy_entry(const dict_iter_t *iter)
 {
         /* notice that we don't need to set the slot to NULL,
@@ -109,6 +114,15 @@ static void destroy_entry(const dict_iter_t *iter)
         free(iter->curr->key);
         iter->curr->val->op->destroy(iter->curr->val);
         free(iter->curr);
+}
+
+/* used as a callback function for dict_iter()
+ * in function dict_destroy(), will always return 0
+ */
+static int destroy_entry_callback(const dict_iter_t *iter, void *dummy)
+{
+        destroy_entry(iter);
+        return 0;
 }
 
 /* lookup a dict_iter by hashnum and return an iterator,
@@ -194,7 +208,7 @@ int dict_rm(dict_t *dict, const bss_t *key)
 /* destroy every entry, and destroy the dict itself */
 void dict_destroy(dict_t *dict)
 {
-        dict_iter(dict, destroy_entry);
+        dict_iter(dict, destroy_entry_callback, NULL);
         free(dict->hash_tbl);
         free(dict);
 }
@@ -243,23 +257,26 @@ int dict_add(dict_t *dict, const bss_t *key, obj_t *obj)
 
         /* if key exists, replace it with the new one*/
         if(NULL != iter.curr) {
+                bss_destroy(iter.curr->key);
+                iter.curr->key = (bss_t *)key;
                 iter.curr->val->op->destroy(iter.curr->val);
                 iter.curr->val = obj;
                 return 0;
+        } else {
+
+                if(NULL == (iter.curr = dict_entry_create(key, obj)))
+                        return E_MEM_OUT;
+
+                if(NULL == iter.prev)
+                        dict->hash_tbl[hash] = iter.curr;
+                else
+                        iter.prev->next = iter.curr;
+
+                /* now the entry is safely added to the dict */
+                dict->entry_num++;
+
+                return 0;
         }
-
-        if(NULL == (iter.curr = dict_entry_create(key, obj)))
-                return E_MEM_OUT;
-
-        if(NULL == iter.prev)
-                dict->hash_tbl[hash] = iter.curr;
-        else
-                iter.prev->next = iter.curr;
-
-        /* now the entry is safely added to the dict */
-        dict->entry_num++;
-
-        return 0;
 }
 
 int dict_rename(dict_t *dict, const bss_t *key, bss_t *new_key)
@@ -273,7 +290,7 @@ int dict_rename(dict_t *dict, const bss_t *key, bss_t *new_key)
                 return E_NOT_FOUND;
 
         /* check if new_key already exists
-         * if it dose replace it with our new key and value
+         * if it dose, replace it with our new key and value
          */
         hash = dict_get_hash(new_key) & dict->bit_mask;
         new_iter = _dict_look_up_hash(dict, hash, new_key);

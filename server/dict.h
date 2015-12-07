@@ -39,7 +39,7 @@ typedef struct dict dict_t;
 /* we use a 32-bit unsigned int as hash key */
 typedef uint32_t hkey_t;
 /* prototype of the callback function required by dict_iter() */
-typedef void (*dict_callback_t)(const dict_iter_t *dict_iter);
+typedef int (*dict_callback_t)(const dict_iter_t *dict_iter, void *data);
 
 /* convert power to uint32_t */
 #define pwr2size(power) (((uint32_t)1) << (power))
@@ -55,7 +55,7 @@ int dict_rm(dict_t *dict, const bss_t *key);
 dict_iter_t dict_rm_nf(dict_t *dict, const bss_t *key);
 dict_iter_t _dict_look_up(const dict_t *dict, const bss_t *key);
 obj_t *dict_look_up(const dict_t *dict, const bss_t *key);
-void dict_iter(const dict_t *dict, dict_callback_t func);
+int dict_iter(const dict_t *dict, dict_callback_t func, void *data);
 
 #ifdef DICT_RESIZE
 int dict_expand(dict_t *dict, uint8_t power);

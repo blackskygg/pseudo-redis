@@ -3,7 +3,9 @@
 
 #include "server.h"
 
-#define CMD_PROTO(name) reply_t* name##_command(bss_t *args[], size_t num)
+#define CMD_PROTO(name) int name##_command(bss_t *args[], size_t num)
+#define _CMD_PROTO(name) void _##name##_command(dict_t *dict, \
+                                                   bss_t *args[], size_t num)
 
 CMD_PROTO(del);
 CMD_PROTO(exists);

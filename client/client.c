@@ -10,7 +10,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#define BUF_SIZE 4096
+#define BUF_SIZE 1024 * 1024
 #define NAME_LEN 16
 
 /* raw request structure */
@@ -30,6 +30,7 @@ typedef struct request request_t;
 #define RPLY_INT 4
 #define RPLY_FLOAT 5
 #define RPLY_STRING 6
+#define RPLY_ARR 7
 
 /* reply structure */
 struct reply {
@@ -38,7 +39,6 @@ struct reply {
         uint8_t data[];
 }__attribute__((__packed__));
 typedef struct reply reply_t;
-
 
 
 int id; /* client id */
@@ -78,6 +78,10 @@ int send_request(char name[NAME_LEN], char *str, size_t len)
 
 void display_reply(reply_t *reply)
 {
+        int index = 1;
+        uint32_t len = 0;
+        uint8_t *pos = reply->data;
+
         switch(reply->reply_type) {
         case RPLY_OK:
                 printf("OK\n");
@@ -93,6 +97,27 @@ void display_reply(reply_t *reply)
                 break;
         case RPLY_NIL:
                 printf("(nil)\n");
+                break;
+        case RPLY_ARR:
+                for(;;) {
+                        if(! (len = *(uint32_t *)pos))
+                                break;
+                        pos += sizeof(len);
+
+                        printf("%d) \"", index);
+                        fflush(stdout);
+                        write(1, pos, len);
+                        fflush(stdout);
+                        printf("\"\n");
+                        fflush(stdout);
+
+                        pos += len;
+                        index++;
+                }
+
+                if(1 == index)
+                        printf("(empty list or set)\n");
+
                 break;
         default:
                 break;

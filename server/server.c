@@ -60,6 +60,15 @@ EXTERN command_t commad_tbl[] = {CMD_ENT(del), CMD_ENT(exists),
 static int listening_fd;
 static int efd; /* epoll fd */
 static request_t *curr_request;
+static reply_t *curr_reply;  /* since we are single-threaded,
+                              * we can share one reply structure
+                              */
+static bss_t *reply_arr[MAX_ARGS]; /* when replying an array, the only thing to
+                                    * do is just to fill in this array, and
+                                    * a call to arr_reply() will get everything
+                                    * done
+                                    */
+static int rply_arr_len;  /* used to keep track of the length of reply_arr */
 
 
 
@@ -116,45 +125,79 @@ int create_server_socket(unsigned short port, int nqueued)
 }
 
 /* ======== below are some shorthands for constructing replies ======== */
-reply_t* create_empty_reply(int type)
+int create_empty_reply(int type)
 {
-        reply_t *reply = malloc(sizeof(reply_t));
-        if(NULL == reply)
-                return NULL;
+        curr_reply->reply_type = type;
+        curr_reply->len = 0;
 
-        reply->reply_type = type;
-        reply->len = 0;
-
-        return reply;
-
+        return 0;
 }
 
-reply_t* create_str_reply(char *s, size_t len, int type)
+int create_str_reply(char *s, size_t len, int type)
 {
-        reply_t *reply = malloc(sizeof(reply_t) + len);
-        if(NULL == reply)
-                return NULL;
+        if(len > MAX_RPLY_SIZE)
+                return E_TOO_LONG;
 
-        reply->reply_type = type;
-        reply->len = len;
-        memcpy(reply->data, s, len);
+        curr_reply->reply_type = type;
+        curr_reply->len = len;
+        memcpy(curr_reply->data, s, len);
 
-        return reply;
-
+        return 0;
 }
 
-reply_t* create_int_reply(int64_t n)
+int create_int_reply(int64_t n)
 {
-        reply_t *reply = malloc(sizeof(reply_t) + sizeof(int64_t));
-        if(NULL == reply)
-                return NULL;
-
-        reply->reply_type = RPLY_INT;
-        reply->len = sizeof(int64_t);
+        curr_reply->reply_type = RPLY_INT;
+        curr_reply->len = sizeof(int64_t);
         n = htobe64(n);
-        memcpy(reply->data, &n, sizeof(int64_t));
+        memcpy(curr_reply->data, &n, sizeof(int64_t));
 
-        return reply;
+        return 0;
+}
+
+void reset_reply_arr()
+{
+        rply_arr_len = 0;
+}
+
+/* fill in the reply array
+ * return E_TOO_LONG if the array is full
+ */
+int addto_reply_arr(bss_t *bss_ptr)
+{
+        if(rply_arr_len == MAX_ARGS)
+                return E_TOO_LONG;
+
+        reply_arr[rply_arr_len++] = bss_ptr;
+        return 0;
+}
+
+int create_arr_reply()
+{
+        uint8_t *pos = curr_reply->data;
+        uint32_t total_len = 0;
+        uint32_t len = 0;
+        for(int i = 0; i < rply_arr_len; ++i) {
+                /* check if we WILL exceed the limit */
+                len = reply_arr[i]->len;
+                if((total_len + len + 2 * sizeof(len)) > MAX_RPLY_SIZE)
+                        return E_TOO_LONG;
+
+                memcpy(pos, &len, sizeof(len));
+                pos += sizeof(len);
+                memcpy(pos, reply_arr[i]->str, len);
+                pos += len;
+
+                total_len += len + sizeof(len);
+        }
+
+        len = 0;
+        /* add the ending 0 */
+        memcpy(pos, &len, sizeof(len));
+        curr_reply->reply_type = RPLY_ARR;
+        curr_reply->len = total_len + sizeof(len);
+
+        return 0;
 }
 
 /* ======== above are some shorthands for constructing replies ======== */
@@ -203,7 +246,7 @@ int parse_args(uint8_t *data, uint32_t len, bss_t *args[], uint32_t *ret_size)
 }
 
 /* process the raw request */
-int process_request(request_t *request, reply_t **reply_ptr)
+int process_request(request_t *request)
 {
         bss_t *args[MAX_ARGS];
         uint32_t args_len;
@@ -215,21 +258,20 @@ int process_request(request_t *request, reply_t **reply_ptr)
                         ret_val = parse_args(request->data, request->len,
                                    args, &args_len);
                         if(0 != ret_val) {
-                                *reply_ptr = fail_reply(INV_ARG);
-                                return 0;
+                                fail_reply(INV_ARG);
                         }
 
                         /* this call itself would decide which args to use
-                         * -and which args to free
+                         * -and which args to free, and modify curr_reply
                          */
-                        *reply_ptr = commad_tbl[i].func(args, args_len);
-
-                        return 0;
+                        if(commad_tbl[i].func(args, args_len) != 0)
+                                fail_reply(TOO_LONG);
+                        else
+                                return 0;
                 }
         }
 
-        *reply_ptr = fail_reply(INV_CMD);
-        return 0;
+        fail_reply(INV_CMD);
 }
 
 
@@ -245,6 +287,10 @@ int server_init()
 
         curr_request = malloc(sizeof(struct request) + IN_BUF_SIZE);
         if(NULL == curr_request)
+                return E_MEM_OUT;
+
+        curr_reply = malloc(sizeof(reply_t) + MAX_RPLY_SIZE);
+        if(NULL == curr_reply)
                 return E_MEM_OUT;
 
         /* network initialization */
@@ -264,46 +310,30 @@ void server_destroy()
 {
         dict_destroy(key_dict);
         free(curr_request);
+        free(curr_reply);
         close(listening_fd);
 }
 
-void send_reply(reply_t *reply, int fd)
+void send_reply(int fd)
 {
-        write(fd, reply, sizeof(reply_t) + reply->len);
-}
-
-void send_failure(int fd)
-{
-        reply_t *reply = malloc(sizeof(reply_t));
-
-        if(reply) {
-                reply->reply_type = RPLY_FAIL;
-                reply->len = 0;
-                send_reply(reply, fd);
-
-                free(reply);
-        }
+        write(fd, curr_reply, sizeof(reply_t) + curr_reply->len);
 }
 
 /* process the incoming data */
 int process_in_data(struct epoll_event *ev)
 {
         int n_read;
-        reply_t *rply_ptr;
 
+        /* read all the possible data */
         while((n_read = read(ev->data.fd, (void *)curr_request,
                              sizeof(request_t) + IN_BUF_SIZE)) > 0) {
-                      /* TODO : remember to free *reply_ptr */
-                if(process_request(curr_request, &rply_ptr) == 0) {
-                        if(rply_ptr)
-                                send_reply(rply_ptr, ev->data.fd);
-                        else
-                                send_failure(ev->data.fd);
-                } else {
-                        send_failure(ev->data.fd);
-                }
+
+                process_request(curr_request);
+                send_reply(ev->data.fd);
         }
 
+
+        /* diconnected */
         if(0 == n_read) {
                 printf("%d is disconnected\n", ev->data.fd);
                 epoll_ctl(efd, EPOLL_CTL_DEL, ev->data.fd, NULL);
