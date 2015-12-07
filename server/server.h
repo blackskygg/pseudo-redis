@@ -36,6 +36,7 @@
 #define RPLY_FLOAT 5
 #define RPLY_STRING 6
 #define RPLY_ARR 7
+#define RPLY_TYPE 8
 
 
 /* the internal representation of a client */
@@ -78,6 +79,7 @@ int create_empty_reply(int type);
 int create_str_reply(char *s, size_t len, int type);
 int create_int_reply(int64_t n);
 int create_arr_reply();
+int create_type_reply(uint8_t n);
 int addto_reply_arr(bss_t *bss);
 void reset_reply_arr();
 /* shortcuts */
@@ -101,6 +103,7 @@ void reset_reply_arr();
 #define false_reply() return create_int_reply(0)
 #define int_reply(n) return create_int_reply(n)
 #define arr_reply() return create_arr_reply()
+#define type_reply(n) return create_type_reply(n)
 
 /* global server data */
 EXTERN dict_t *key_dict;  /* this dictionary is the MAIN dictionary holding

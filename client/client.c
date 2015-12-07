@@ -31,6 +31,15 @@ typedef struct request request_t;
 #define RPLY_FLOAT 5
 #define RPLY_STRING 6
 #define RPLY_ARR 7
+#define RPLY_TYPE 8
+
+/* type identifiers */
+#define STRING 0
+#define INTEGER 1
+#define SET 2
+#define HASH 3
+#define LIST 4
+#define NONE 5
 
 /* reply structure */
 struct reply {
@@ -45,6 +54,13 @@ int id; /* client id */
 int fd; /* used to communicate with the server */
 char buf[BUF_SIZE];
 
+/* type->string map */
+char *type_str[] = {"string",
+                    "integer",
+                    "set",
+                    "hash",
+                    "list",
+                    "none"};
 
 int connect_server(ushort port, char *host)
 {
@@ -118,6 +134,9 @@ void display_reply(reply_t *reply)
                 if(1 == index)
                         printf("(empty list or set)\n");
 
+                break;
+        case RPLY_TYPE:
+                printf("%s\n", type_str[reply->data[0]]);
                 break;
         default:
                 break;

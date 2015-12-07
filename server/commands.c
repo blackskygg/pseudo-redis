@@ -157,6 +157,17 @@ CMD_PROTO(rename)
 
 CMD_PROTO(type)
 {
+        CHECK_ARGS(1);
+
+        obj_t *val_obj;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                type_reply(NONE);
+        } else {
+                FREE_ARG(0);
+                type_reply(val_obj->type);
+        }
 }
 
 CMD_PROTO(append)
@@ -572,6 +583,18 @@ CMD_PROTO(hdel)
 
 CMD_PROTO(hlen)
 {
+        CHECK_ARGS(1);
+
+        obj_t *val_obj;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                false_reply();
+        } else {
+                CHECK_TYPE(val_obj, HASH);
+                FREE_ARG(0);
+                int_reply(((dict_t *)val_obj->val)->entry_num);
+        }
 }
 
 CMD_PROTO(hexists)
@@ -623,15 +646,20 @@ CMD_PROTO(hgetall)
         obj_t *val_obj;
 
         reset_reply_arr();
-        if(NULL == (val_obj = dict_look_up(key_dict, args[0])))
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
                 arr_reply();
+        }
 
         CHECK_TYPE(val_obj, HASH);
 
-        if(0 != dict_iter((dict_t *)val_obj->val, add_key_val_to_arr, NULL))
+        if(0 != dict_iter((dict_t *)val_obj->val, add_key_val_to_arr, NULL)) {
+                FREE_ARG(0);
                 fail_reply(TOO_LONG);
-        else
+        } else {
+                FREE_ARG(0);
                 arr_reply();
+        }
 
 }
 

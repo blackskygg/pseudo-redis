@@ -155,6 +155,15 @@ int create_int_reply(int64_t n)
         return 0;
 }
 
+int create_type_reply(uint8_t n)
+{
+        curr_reply->reply_type = RPLY_TYPE;
+        curr_reply->len = sizeof(uint8_t);
+        curr_reply->data[0] = n;
+
+        return 0;
+}
+
 void reset_reply_arr()
 {
         rply_arr_len = 0;
