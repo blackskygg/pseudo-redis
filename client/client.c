@@ -153,9 +153,7 @@ int main()
                 return -1;
         }
 
-        if(read(fd, &id, sizeof id) >0)
-                printf("connected! My id is %d.\n", id);
-        else
+        if(read(fd, &id, sizeof id) <= 0)
                 return -1;
 
         do {

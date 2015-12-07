@@ -699,6 +699,7 @@ CMD_PROTO(hset)
 
         obj_t *val_obj;
         dict_t *dict;
+        uint8_t flag;
 
         if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
                 /* if it dose not exist, create one */
@@ -706,11 +707,25 @@ CMD_PROTO(hset)
                 val_obj = dict_create_obj(dict);
                 dict_add(key_dict, args[0], val_obj);
 
-                return _set_command(dict, args + 1, num - 1);
+                _set_command(dict, args + 1, num - 1);
+                true_reply();
         } else {
                 CHECK_TYPE(val_obj, HASH);
+
                 FREE_ARG(0);
-                return _set_command((dict_t *)val_obj->val, args + 1, num - 1);
+
+                /* check if the target already exists */
+                if(NULL == dict_look_up((dict_t *)val_obj->val, args[1]))
+                        flag = 0;
+                else
+                        flag = 1;
+
+                _set_command((dict_t *)val_obj->val, args + 1, num - 1);
+
+                if(flag)
+                        false_reply();
+                else
+                        true_reply();
         }
 }
 
