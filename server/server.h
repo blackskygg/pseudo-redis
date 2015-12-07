@@ -24,6 +24,7 @@
 #define MAX_RPLY_SIZE 1024*1024
 #define MAX_RPLY_ARR 1024
 #define MAX_ARGS  1024
+#define NEW_DICT_POW 7
 
 
 /* the t field in a struct tlv can be one of the followings */

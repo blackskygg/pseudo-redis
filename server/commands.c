@@ -28,42 +28,113 @@
                         }})
 
 
-/* this command applies too ALL the functions in this file
+/* <--!!! this comment applies too ALL the functions in this file-->
  * the xxx_reply() calls are actually marcros
  * and they ALL imply a "return" statement
  */
 
-CMD_PROTO(del)
+_CMD_PROTO(del)
 {
         CHECK_ARGS(1);
 
-        if(0 != dict_rm(key_dict, args[0])) {
+        if(0 != dict_rm(dict, args[0])) {
                 FREE_ARG(0);
                 false_reply();
         } else {
                 FREE_ARG(0);
                 true_reply();
         }
+}
+
+_CMD_PROTO(exists)
+{
+        CHECK_ARGS(1);
+
+        if(NULL == dict_look_up(dict, args[0])) {
+                FREE_ARG(0);
+                false_reply();
+        } else {
+                FREE_ARG(0);
+                true_reply();
+        }
+
+}
+
+/* helper function used by dict_iter to add keys to an array */
+int addkey_to_arr(const dict_iter_t *dict_iter, void *dummy)
+{
+        return addto_reply_arr(dict_iter->curr->key);
+}
+
+_CMD_PROTO(keys)
+{
+        CHECK_ARGS(1);
+
+        reset_reply_arr();
+        if(0 != dict_iter(dict, addkey_to_arr, NULL))
+                fail_reply(TOO_LONG);
+        else
+                arr_reply();
+}
+
+
+_CMD_PROTO(get)
+{
+        CHECK_ARGS(1);
+
+        obj_t *val_obj;
+        size_t len;
+
+        val_obj = dict_look_up(dict, args[0]);
+        if(NULL != val_obj) {
+                CHECK_TYPE(val_obj, STRING);
+                len = ((bss_t *)val_obj->val)->len + 1;
+
+                FREE_ARG(0);
+                string_reply(((bss_t *)val_obj->val)->str, len);
+        } else {
+                FREE_ARG(0);
+                nil_reply();
+        }
+}
+
+
+_CMD_PROTO(set)
+{
+        CHECK_ARGS(2);
+
+        obj_t *val_obj;
+
+        CHECK_NULL(val_obj = bss_create_obj(args[1]));
+        if(0 != dict_add(dict, args[0], val_obj)) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                fail_reply(MEM_OUT);
+        } else {
+                ok_reply();
+        }
+
+}
+
+CMD_PROTO(del)
+{
+        return _del_command(key_dict, args, num);
 }
 
 CMD_PROTO(exists)
 {
-        CHECK_ARGS(1);
-
-        if(NULL == dict_look_up(key_dict, args[0])) {
-                FREE_ARG(0);
-                false_reply();
-        } else {
-                FREE_ARG(0);
-                true_reply();
-        }
-
+        return _exists_command(key_dict, args, num);
 }
+
 
 CMD_PROTO(randomkey)
 {
 }
 
+CMD_PROTO(keys)
+{
+        return _keys_command(key_dict, args, num);
+}
 
 CMD_PROTO(rename)
 {
@@ -80,22 +151,6 @@ CMD_PROTO(rename)
 
 }
 
-/* helper function used by dict_iter to add keys to an array */
-int addkey_to_arr(const dict_iter_t *dict_iter, void *dummy)
-{
-        return addto_reply_arr(dict_iter->curr->key);
-}
-
-CMD_PROTO(keys)
-{
-        CHECK_ARGS(1);
-
-        reset_reply_arr();
-        if(0 != dict_iter(key_dict, addkey_to_arr, NULL))
-                fail_reply(TOO_LONG);
-        else
-                arr_reply();
-}
 
 CMD_PROTO(type)
 {
@@ -468,39 +523,12 @@ CMD_PROTO(msetnx)
 
 CMD_PROTO(get)
 {
-        CHECK_ARGS(1);
-
-        obj_t *val_obj;
-        size_t len;
-
-        val_obj = dict_look_up(key_dict, args[0]);
-        if(NULL != val_obj) {
-                CHECK_TYPE(val_obj, STRING);
-                len = ((bss_t *)val_obj->val)->len + 1;
-
-                FREE_ARG(0);
-                string_reply(((bss_t *)val_obj->val)->str, len);
-        } else {
-                FREE_ARG(0);
-                nil_reply();
-        }
+        return _get_command(key_dict, args, num);
 }
 
 CMD_PROTO(set)
 {
-        CHECK_ARGS(2);
-
-        obj_t *val_obj;
-
-        CHECK_NULL(val_obj = bss_create_obj(args[1]));
-        if(0 != dict_add(key_dict, args[0], val_obj)) {
-                FREE_ARG(0);
-                FREE_ARG(1);
-                fail_reply(MEM_OUT);
-        } else {
-                ok_reply();
-        }
-
+        return _set_command(key_dict, args, num);
 }
 
 CMD_PROTO(strlen)
@@ -523,6 +551,20 @@ CMD_PROTO(strlen)
 
 CMD_PROTO(hdel)
 {
+        CHECK_ARGS(2);
+
+        obj_t *val_obj;
+        bss_t *bss;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                false_reply();
+        } else {
+                CHECK_TYPE(val_obj, HASH);
+                FREE_ARG(0);
+                return _del_command((dict_t *)val_obj->val, args + 1, num - 1);
+        }
 }
 
 CMD_PROTO(hlen)
@@ -531,6 +573,20 @@ CMD_PROTO(hlen)
 
 CMD_PROTO(hexists)
 {
+        CHECK_ARGS(2);
+
+        obj_t *val_obj;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                false_reply();
+        } else {
+                CHECK_TYPE(val_obj, HASH);
+                FREE_ARG(0);
+                return _exists_command((dict_t *)val_obj->val, args + 1, num - 1);
+        }
+
 }
 
 CMD_PROTO(hmget)
@@ -539,6 +595,18 @@ CMD_PROTO(hmget)
 
 CMD_PROTO(hget)
 {
+        CHECK_ARGS(2);
+
+        obj_t *val_obj;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, 2);
+                nil_reply();
+        } else {
+                CHECK_TYPE(val_obj, HASH);
+                FREE_ARG(0);
+                return _get_command((dict_t *)val_obj->val, args + 1, num - 1);
+        }
 }
 
 CMD_PROTO(hmset)
@@ -555,6 +623,23 @@ CMD_PROTO(hincrby)
 
 CMD_PROTO(hset)
 {
+        CHECK_ARGS(3);
+
+        obj_t *val_obj;
+        dict_t *dict;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                /* if it dose not exist, create one */
+                dict = dict_create(NEW_DICT_POW);
+                val_obj = dict_create_obj(dict);
+                dict_add(key_dict, args[0], val_obj);
+
+                return _set_command(dict, args + 1, num - 1);
+        } else {
+                CHECK_TYPE(val_obj, HASH);
+                FREE_ARG(0);
+                return _set_command((dict_t *)val_obj->val, args + 1, num - 1);
+        }
 }
 
 CMD_PROTO(hincrbyfloat)

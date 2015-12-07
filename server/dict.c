@@ -51,7 +51,6 @@ dict_t *dict_create(int power)
 
 obj_t *dict_create_obj(const void *data)
 {
-        const dict_t *dict_ptr_old = data;
         dict_t *dict_ptr;
         obj_t *obj_ptr;
 
@@ -59,14 +58,9 @@ obj_t *dict_create_obj(const void *data)
         if(NULL == (obj_ptr = malloc(sizeof(obj_t))))
                 return NULL;
 
-        if(NULL == (dict_ptr = dict_create(dict_ptr_old->power))) {
-                free(obj_ptr);
-                return NULL;
-        }
-
         obj_ptr->type = HASH;
         obj_ptr->op = &dict_op;
-        obj_ptr->val = dict_ptr;
+        obj_ptr->val = (void *)data;
 
         return obj_ptr;
 }
