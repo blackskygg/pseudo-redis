@@ -94,14 +94,14 @@ _CMD_PROTO(get)
         size_t len;
 
         val_obj = dict_look_up(dict, args[0]);
+        FREE_ARG(0);
+
         if(NULL != val_obj) {
                 CHECK_TYPE(val_obj, STRING);
                 len = ((bss_t *)val_obj->val)->len + 1;
 
-                FREE_ARG(0);
                 string_reply(((bss_t *)val_obj->val)->str, len);
         } else {
-                FREE_ARG(0);
                 nil_reply();
         }
 }
@@ -249,6 +249,27 @@ ERR_INV_INT:
         FREE_ARG(0);
         FREE_ARG(1);
         fail_reply(INV_INT);
+}
+
+_CMD_PROTO(setnx)
+{
+        CHECK_ARGS(2);
+
+        obj_t *val_obj;
+
+        if(NULL !=  dict_look_up(dict, args[0])) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                false_reply();
+        } else {
+                return _set_command(dict, args, num);
+        }
+
+}
+
+CMD_PROTO(setnx)
+{
+        return _setnx_command(key_dict, args, num);
 }
 
 CMD_PROTO(del)
@@ -581,6 +602,33 @@ CMD_PROTO(decrby)
 
 CMD_PROTO(msetnx)
 {
+        if((num < 2) || (num % 2 != 0)) {
+                FREE_ARGS(0, num);
+                fail_reply(NUM_ARGS);
+        }
+
+        /* check if any of the keys exists */
+        for(int i = 0; i < num; i+=2) {
+                if(NULL != dict_look_up(key_dict, args[i])) {
+                        FREE_ARGS(0, num);
+                        false_reply();
+                }
+        }
+
+        int ret;
+        for(int i = 0; i < num; i+=2) {
+                /* set for each entry and check if it succeeded */
+                ret = _set_command(key_dict, args + i, 2);
+
+                /* error occurred, clean up and report the error */
+                if(_curr_reply->reply_type != RPLY_OK || 0 != ret) {
+                        FREE_ARGS(i + 2, num);
+                        return ret;
+                }
+        }
+
+        /* no clean up is needed, safely return */
+        true_reply();
 }
 
 CMD_PROTO(get)
@@ -825,7 +873,7 @@ CMD_PROTO(hmset)
         }
 
         /* no clean up is needed, safely return */
-        return 0;
+        return ret;
 }
 
 CMD_PROTO(hincrbyfloat)
@@ -834,6 +882,34 @@ CMD_PROTO(hincrbyfloat)
 
 CMD_PROTO(hsetnx)
 {
+        CHECK_ARGS(3);
+
+        obj_t *val_obj;
+        dict_t *dict;
+        uint8_t flag;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                /* if it dose not exist, create one */
+                dict = dict_create(NEW_DICT_POW);
+                val_obj = dict_create_obj(dict);
+                dict_add(key_dict, args[0], val_obj);
+
+                _set_command(dict, args + 1, num - 1);
+                true_reply();
+        } else {
+                CHECK_TYPE(val_obj, HASH);
+
+                FREE_ARG(0);
+
+                /* check if the target already exists */
+                if(NULL == dict_look_up((dict_t *)val_obj->val, args[1])) {
+                        return _set_command((dict_t *)val_obj->val,
+                                            args + 1, num - 1);
+                } else {
+                        false_reply();
+                }
+        }
+
 }
 
 CMD_PROTO(hkeys)

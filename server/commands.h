@@ -27,6 +27,7 @@ CMD_PROTO(decrby);
 CMD_PROTO(msetnx);
 CMD_PROTO(get);
 CMD_PROTO(set);
+CMD_PROTO(setnx);
 CMD_PROTO(strlen);
 CMD_PROTO(hdel);
 CMD_PROTO(hlen);
