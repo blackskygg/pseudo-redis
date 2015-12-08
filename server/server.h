@@ -27,8 +27,12 @@
 #define MAX_ARGS  1024
 #define NEW_DICT_POW 7
 
-
-/* the t field in a struct tlv can be one of the followings */
+/* the reply types
+ * NOTE : the arr protocal is simple : (len|val) denotes an element
+ * and if len is 0, the whole array is ended
+ * else if len is MAX_RPLY_SIZE, the element is (nil)
+ * else ... it's what it is
+ */
 #define RPLY_COMMAND 0
 #define RPLY_OK 1
 #define RPLY_NIL 2
@@ -106,10 +110,23 @@ void reset_reply_arr();
 #define arr_reply() return create_arr_reply()
 #define type_reply(n) return create_type_reply(n)
 
-/* global server data */
+/* global server data
+ * but modifying the ones with leading underscore is NOT recommended
+ * UNLESS you know exactely what you're doing
+ */
 EXTERN dict_t *key_dict;  /* this dictionary is the MAIN dictionary holding
                            * all the keys and their data
                            */
+EXTERN reply_t *_curr_reply;  /* since we are single-threaded,
+                              * we can share one reply structure
+                              */
+EXTERN bss_t *_reply_arr[MAX_ARGS]; /* when replying an array, the only thing to
+                                    * do is just to fill in this array, and
+                                    * a call to arr_reply() will get everything
+                                    * done
+                                    */
+EXTERN int _rply_arr_len;  /* used to keep track of the length of reply_arr */
+
 
 
 

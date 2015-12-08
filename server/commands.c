@@ -15,6 +15,13 @@
                                 fail_reply(NUM_ARGS);           \
                         }})
 
+#define CHECK_ARGS_GE(n) ({                                     \
+                        if(num < (n)) {                         \
+                                FREE_ARGS(0, num);              \
+                                fail_reply(NUM_ARGS);           \
+                        }})
+
+
 #define CHECK_TYPE(obj, t) ({                                   \
                         if((obj)->type != (t)){                 \
                                 FREE_ARGS(0, num);              \
@@ -164,6 +171,32 @@ ERR_INV_INT:
         FREE_ARG(1);
         fail_reply(INV_INT);
 
+}
+
+_CMD_PROTO(mget)
+{
+        CHECK_ARGS_GE(1);
+
+        obj_t *tar_obj;
+        int ret;
+
+        reset_reply_arr();
+        for(int i = 0; i < num; ++i) {
+                tar_obj = dict_look_up(dict, args[i]);
+
+                if((NULL != tar_obj) && (STRING == tar_obj->type))
+                        ret = addto_reply_arr(tar_obj->val);
+                else
+                        ret = addto_reply_arr(0);
+
+                if(ret != 0) {
+                        FREE_ARGS(0, num);
+                        fail_reply(TOO_LONG);
+                }
+        }
+
+        FREE_ARGS(0, num);
+        arr_reply();
 }
 
 _CMD_PROTO(decrby)
@@ -405,6 +438,7 @@ ERR_MEM_OUT:
 
 CMD_PROTO(mget)
 {
+        return _mget_command(key_dict, args, num);
 }
 
 CMD_PROTO(bitcount)
@@ -631,6 +665,30 @@ CMD_PROTO(hexists)
 
 CMD_PROTO(hmget)
 {
+        CHECK_ARGS_GE(2);
+
+        obj_t *val_obj, *tar_obj;
+        dict_t *dict;
+        int ret;
+
+        /* all nil? */
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, num);
+
+                reset_reply_arr();
+                for(int i = 1; i < num; ++i) {
+                        if(0 != (ret = addto_reply_arr(NULL))) {
+                                fail_reply(TOO_LONG);
+                        }
+                }
+                arr_reply();
+        } else {
+                CHECK_TYPE(val_obj, HASH);
+                dict = val_obj->val;
+                FREE_ARG(0);
+
+                return _mget_command(dict, args + 1, num - 1);
+        }
 }
 
 CMD_PROTO(hget)
@@ -647,10 +705,6 @@ CMD_PROTO(hget)
                 FREE_ARG(0);
                 return _get_command((dict_t *)val_obj->val, args + 1, num - 1);
         }
-}
-
-CMD_PROTO(hmset)
-{
 }
 
 CMD_PROTO(hgetall)
@@ -732,6 +786,46 @@ CMD_PROTO(hset)
                 else
                         true_reply();
         }
+}
+
+
+CMD_PROTO(hmset)
+{
+        if((num < 3) || (num % 2 != 1)) {
+                FREE_ARGS(0, num);
+                fail_reply(NUM_ARGS);
+        }
+
+        obj_t *val_obj;
+        dict_t *dict;
+        int ret;
+
+        /* if it dose not exist, create one */
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                dict = dict_create(NEW_DICT_POW);
+                val_obj = dict_create_obj(dict);
+                dict_add(key_dict, args[0], val_obj);
+        } else {
+
+                dict = val_obj->val;
+                CHECK_TYPE(val_obj, HASH);
+                FREE_ARG(0);
+        }
+
+        /* now we've got enough information, let's roll */
+        for(int i = 1; i < num; i+=2) {
+                /* set for each entry and check if it succeeded */
+                ret = _set_command((dict_t *)val_obj->val, args + i, 2);
+
+                /* error occurred, clean up and report the error */
+                if(_curr_reply->reply_type != RPLY_OK || 0 != ret) {
+                        FREE_ARGS(i + 2, num);
+                        return ret;
+                }
+        }
+
+        /* no clean up is needed, safely return */
+        return 0;
 }
 
 CMD_PROTO(hincrbyfloat)

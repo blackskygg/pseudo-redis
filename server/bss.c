@@ -150,8 +150,10 @@ obj_t *bss_cpy_obj(obj_t *a, const obj_t *b)
 
 int bss_cmp(const bss_t *a, const bss_t *b)
 {
-        size_t len = a->len < b->len ? a->len : b->len;
-        return memcmp(a->str, b->str, len);
+        if(a->len != b->len)
+                return a->len - b->len;
+
+        return memcmp(a->str, b->str, a->len);
 }
 
 int bss_cmp_obj(const obj_t *a, const obj_t *b)

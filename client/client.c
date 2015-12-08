@@ -10,19 +10,17 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+/* some limits */
 #define BUF_SIZE 1024 * 1024
+#define MAX_RPLY_SIZE 1024*1024
 #define NAME_LEN 16
 
-/* raw request structure */
-struct request {
-        char command[16];
-        uint32_t client_id; /* allocated on connection, by the server */
-        uint32_t len;  /* length of data */
-        uint8_t  data[]; /* the request string */
-}__attribute__((__packed__));
-typedef struct request request_t;
-
-/* the t field in a struct tlv can be one of the followings */
+/* the reply types
+ * NOTE : the arr protocal is simple : (len|val) denotes an element
+ * and if len is 0, the whole array is ended
+ * else if len is MAX_RPLY_SIZE, the element is (nil)
+ * else ... it's what it is
+ */
 #define RPLY_COMMAND 0
 #define RPLY_OK 1
 #define RPLY_NIL 2
@@ -49,7 +47,17 @@ struct reply {
 }__attribute__((__packed__));
 typedef struct reply reply_t;
 
+/* raw request structure */
+struct request {
+        char command[16];
+        uint32_t client_id; /* allocated on connection, by the server */
+        uint32_t len;  /* length of data */
+        uint8_t  data[]; /* the request string */
+}__attribute__((__packed__));
+typedef struct request request_t;
 
+
+/* global variables */
 int id; /* client id */
 int fd; /* used to communicate with the server */
 char buf[BUF_SIZE];
@@ -106,7 +114,12 @@ void display_reply(reply_t *reply)
                 printf("(error)%s\n", reply->data);
                 break;
         case RPLY_STRING:
-                printf("\"%s\"\n", reply->data);
+                printf("\"", index);
+                fflush(stdout);
+                write(1, pos, reply->len);
+                fflush(stdout);
+                printf("\"\n");
+                fflush(stdout);
                 break;
         case RPLY_INT:
                 printf("(interger)%d\n", be64toh(*(int64_t*)reply->data));
@@ -120,14 +133,20 @@ void display_reply(reply_t *reply)
                                 break;
                         pos += sizeof(len);
 
-                        printf("%d) \"", index);
-                        fflush(stdout);
-                        write(1, pos, len);
-                        fflush(stdout);
-                        printf("\"\n");
-                        fflush(stdout);
+                        if(MAX_RPLY_SIZE == len) {
+                                /* Oops, a (nil) */
+                                printf("%d) (nil)\n", index);
+                                fflush(stdout);
+                        } else {
+                                printf("%d) \"", index);
+                                fflush(stdout);
+                                write(1, pos, len);
+                                fflush(stdout);
+                                printf("\"\n");
+                                fflush(stdout);
 
-                        pos += len;
+                                pos += len;
+                        }
                         index++;
                 }
 
