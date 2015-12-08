@@ -40,7 +40,7 @@ CMD_PROTO(hset);
 CMD_PROTO(hincrbyfloat);
 CMD_PROTO(hsetnx);
 CMD_PROTO(hkeys);
-CMD_PROTO(havls);
+CMD_PROTO(hvals);
 CMD_PROTO(blpop);
 CMD_PROTO(lrange);
 CMD_PROTO(brpop);

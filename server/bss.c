@@ -195,15 +195,18 @@ int bss_add_sub(const bss_t *bss, bss_int_t num, int8_t factor)
         if(0 != bss2int(bss, &origin))
                 return E_INV_INT;
 
-        if(factor == -1) {
-                if(BSS_INT_MIN + num > origin)
+        /* the stupid user might want to do something like -(-99) */
+        num = (factor ==  -1) ? -num : num;
+
+        if(num <= 0) {
+                if(BSS_INT_MIN - num > origin)
                         return E_INV_INT;
         } else {
-                if(BSS_INT_MIN - num < num)
+                if(BSS_INT_MAX - num < origin)
                         return E_INV_INT;
         }
 
-        len = sprintf(result, BSS_INT_FMT, factor * num + origin);
+        len = sprintf(result, BSS_INT_FMT, num + origin);
 
         /* we know that bss will not be changed */
         assert( bss == bss_set((bss_t *)bss, result, len) );

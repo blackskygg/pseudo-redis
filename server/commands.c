@@ -61,12 +61,17 @@ _CMD_PROTO(exists)
 }
 
 /* helper function used by dict_iter to add keys to an array */
-int addkey_to_arr(const dict_iter_t *dict_iter, void *dummy)
+static int addkey_to_arr(const dict_iter_t *dict_iter, void *dummy)
 {
         return addto_reply_arr(dict_iter->curr->key);
 }
 
-int add_key_val_to_arr(const dict_iter_t *dict_iter, void *dummy)
+static int addval_to_arr(const dict_iter_t *dict_iter, void *dummy)
+{
+        return addto_reply_arr((bss_t *)dict_iter->curr->val->val);
+}
+
+static int add_key_val_to_arr(const dict_iter_t *dict_iter, void *dummy)
 {
 
         if(0 != addto_reply_arr(dict_iter->curr->key) ||
@@ -755,8 +760,23 @@ CMD_PROTO(hkeys)
                 arr_reply();
 }
 
-CMD_PROTO(havls)
+CMD_PROTO(hvals)
 {
+        CHECK_ARGS(1);
+
+        obj_t *val_obj;
+
+        reset_reply_arr();
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0])))
+                arr_reply();
+
+        CHECK_TYPE(val_obj, HASH);
+
+        if(0 != dict_iter((dict_t *)val_obj->val, addval_to_arr, NULL))
+                fail_reply(TOO_LONG);
+        else
+                arr_reply();
+
 }
 
 CMD_PROTO(blpop)
