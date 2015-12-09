@@ -48,6 +48,7 @@ size_t bss_count_bit(const bss_t *bss);
 bss_t *bss_append(bss_t *bss, char *data, size_t len);
 bss_t *bss_setbit(bss_t *bss, size_t offset, uint val);
 int bss_getbit(const bss_t *bss, size_t offset);
+bss_t *bss_setrange(bss_t *bss, size_t offset, char *data, size_t len);
 
 
 /* functions on the obj layer */

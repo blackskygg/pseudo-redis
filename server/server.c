@@ -125,8 +125,16 @@ int create_empty_reply(int type)
 
 int create_str_reply(char *s, size_t len, int type)
 {
+        /* is it too long? */
         if(len > MAX_RPLY_SIZE)
                 return E_TOO_LONG;
+
+        /* is it an empty string? */
+        if(0 == len) {
+                _curr_reply->reply_type = type;
+                _curr_reply->len = 0;
+                return 0;
+        }
 
         _curr_reply->reply_type = type;
         _curr_reply->len = len;

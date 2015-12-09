@@ -297,14 +297,17 @@ bss_t *bss_setbit(bss_t *bss, size_t offset, uint val)
                 } else {
                         bss_destroy(bss);
 
-                        new_bss->free -= byte;
-                        new_bss->len = byte;
+                        new_bss->free = 0;
+                        new_bss->len = byte + 1;
                         bss = new_bss;
                 }
         } else if(byte + 1 > bss->len) {
+                /* fill 0s */
                 memset(bss->str + bss->len, 0, bss->free);
+
                 bss->free = bsssize(bss) - (byte + 1);
                 bss->len = byte + 1;
+                bss->str[bss->len] = 0; /* wrap up the bss */
         }
 
         if(val)
@@ -314,4 +317,49 @@ bss_t *bss_setbit(bss_t *bss, size_t offset, uint val)
 
         return bss;
 
+}
+
+/* setrange
+ * will create an new one and release the old one
+ * -if the original one is too small
+ * returns the new bss pointer
+ */
+bss_t *bss_setrange(bss_t *bss, size_t offset, char *data, size_t len)
+{
+        size_t new_len;
+        bss_t *new_bss;
+
+        if(len == 0)
+                return bss;
+
+        new_len = len + offset;
+        if(new_len > bsssize(bss)) {
+                if(NULL == (new_bss = bss_create_empty(new_len)))
+                        return NULL;
+
+                if(bss->len > offset)
+                        memcpy(new_bss->str, bss->str, offset);
+                else
+                        memcpy(new_bss->str, bss->str, bss->len);
+
+                memcpy(new_bss->str + offset, data, len);
+
+                new_bss->free = 0;
+                new_bss->len = new_len;
+
+                bss_destroy(bss);
+                return new_bss;
+        } else if(new_len > bss->len) {
+                memcpy(bss->str + offset, data, len);
+
+                bss->free = bsssize(bss) - new_len;
+                bss->len = new_len;
+                bss->str[new_len] = 0;
+
+                return bss;
+        } else {
+                memcpy(bss->str + offset, data, len);
+
+                return bss;
+        }
 }

@@ -419,11 +419,16 @@ CMD_PROTO(setbit)
 
         iter = _dict_look_up(key_dict, args[0]);
         if(NULL == iter.curr) {
-                /* create a new key, and set its value to args[0] */
+                /* create a new key */
                 CHECK_NULL(bss = bss_create_empty(0));
-                if((NULL == (t_bss = bss_setbit(bss, offset, bit)))
-                   || (NULL == (str_obj = bss_create_obj(t_bss)))) {
+                if(NULL == (t_bss = bss_setbit(bss, offset, bit))){
                         free(bss);
+                        goto ERR_MEM_OUT;
+
+                }
+
+                if(NULL == (str_obj = bss_create_obj(t_bss))){
+                        free(t_bss);
                         goto ERR_MEM_OUT;
                 }
 
@@ -449,6 +454,7 @@ CMD_PROTO(setbit)
 
                 str_obj->val = t_bss;
 
+                FREE_ARGS(0, 3);
                 int_reply(result);
         }
 
@@ -485,10 +491,103 @@ CMD_PROTO(bitcount)
 
 CMD_PROTO(setrange)
 {
+        CHECK_ARGS(3);
+
+        dict_iter_t iter;
+        obj_t *str_obj;
+        bss_t *bss, *t_bss;
+        bss_int_t offset;
+
+        /* check the offset */
+        if(0 != bss2int(args[1], &offset)) {
+                FREE_ARGS(0, num);
+                fail_reply(INV_OFFSET);
+        }
+
+        iter = _dict_look_up(key_dict, args[0]);
+        if(NULL == iter.curr) {
+                CHECK_NULL(bss = bss_create_empty(0));
+                if(NULL == (t_bss = bss_setrange(bss, offset,
+                                                 args[2]->str, args[2]->len)))
+                {
+                        free(bss);
+                        goto ERR_MEM_OUT;
+                }
+
+                if(NULL == (str_obj = bss_create_obj(t_bss))) {
+                        free(t_bss);
+                        goto ERR_MEM_OUT;
+                }
+
+                if(0 != dict_add(key_dict, args[0], str_obj)) {
+                        free(t_bss);
+                        free(str_obj);
+                        goto ERR_MEM_OUT;
+
+                }
+
+                FREE_ARG(1);
+                FREE_ARG(2);
+                int_reply(t_bss->len);
+        } else {
+                str_obj = iter.curr->val;
+                CHECK_TYPE(str_obj, STRING);
+                bss = str_obj->val;
+
+                if(NULL == (t_bss = bss_setrange(bss, offset,
+                                                 args[2]->str, args[2]->len)))
+                        goto ERR_MEM_OUT;
+
+                FREE_ARG(0);
+                FREE_ARG(1);
+                str_obj->val = t_bss;
+                int_reply(t_bss->len);
+        }
+
+ERR_MEM_OUT:
+        FREE_ARGS(0, 3);
+        fail_reply(MEM_OUT);
 }
 
 CMD_PROTO(getrange)
 {
+        CHECK_ARGS(3);
+
+        obj_t *str_obj;
+        bss_t *bss;
+        bss_int_t offset1, offset2;
+        size_t len;
+
+        /* obtain the two offsets */
+        if(0 != bss2int(args[1], &offset1)
+           || 0 != bss2int(args[2], &offset2)) {
+                FREE_ARGS(0, num);
+                fail_reply(INV_INT);
+        }
+
+        if(NULL == (str_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, num);
+                string_reply(NULL, 0);
+        } else {
+                CHECK_TYPE(str_obj, STRING);
+                bss = str_obj->val;
+
+                offset1 = (offset1 + (bss_int_t)bss->len) % bss->len;
+                offset2 = (offset2 + (bss_int_t)bss->len) % bss->len;
+
+                /* check the range */
+                if(offset2 < offset1 || offset1 >= bss->len) {
+                        FREE_ARGS(0, num);
+                        string_reply(NULL, 0);
+                }
+
+                len = offset2 > ((bss_int_t)bss->len - 1)
+                        ? (bss_int_t)bss->len  - offset1
+                        : offset2 - offset1 + 1;
+
+                FREE_ARGS(0, num);
+                string_reply(bss->str + offset1, len);
+        }
 }
 
 CMD_PROTO(incr)
@@ -1027,6 +1126,19 @@ CMD_PROTO(smove)
 
 CMD_PROTO(scard)
 {
+        CHECK_ARGS(1);
+
+        obj_t *val_obj;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                false_reply();
+        } else {
+                CHECK_TYPE(val_obj, SET);
+                FREE_ARG(0);
+                int_reply(((dict_t *)val_obj->val)->entry_num);
+        }
+
 }
 
 CMD_PROTO(spop)
