@@ -100,6 +100,19 @@ int send_request(char name[NAME_LEN], char *str, size_t len)
         write(fd, request, sizeof(request_t) + len);
 }
 
+void print_str(uint8_t *data, size_t len)
+{
+        putchar('\"');
+        for(size_t i = 0; i < len; ++i) {
+                if(isgraph(data[i]))
+                        putchar(data[i]);
+                else
+                        printf("\\x%02x", data[i]);
+        }
+        putchar('\"');
+        putchar('\n');
+}
+
 void display_reply(reply_t *reply)
 {
         int index = 1;
@@ -114,12 +127,7 @@ void display_reply(reply_t *reply)
                 printf("(error)%s\n", reply->data);
                 break;
         case RPLY_STRING:
-                printf("\"", index);
-                fflush(stdout);
-                write(1, pos, reply->len);
-                fflush(stdout);
-                printf("\"\n");
-                fflush(stdout);
+                print_str(reply->data, reply->len);
                 break;
         case RPLY_INT:
                 printf("(interger)%d\n", be64toh(*(int64_t*)reply->data));
@@ -136,14 +144,8 @@ void display_reply(reply_t *reply)
                         if(MAX_RPLY_SIZE == len) {
                                 /* Oops, a (nil) */
                                 printf("%d) (nil)\n", index);
-                                fflush(stdout);
                         } else {
-                                printf("%d) \"", index);
-                                fflush(stdout);
-                                write(1, pos, len);
-                                fflush(stdout);
-                                printf("\"\n");
-                                fflush(stdout);
+                                print_str(pos, reply->len);
 
                                 pos += len;
                         }

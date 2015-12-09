@@ -100,7 +100,7 @@ void reset_reply_arr();
 #define INV_SYNX "ERR syntax error"
 #define TOO_LONG "ERR request or reply too long"
 
-#define fail_reply(s) return create_str_reply((s), strlen(s) + 1, RPLY_FAIL)
+#define fail_reply(s) return create_str_reply((s), strlen(s), RPLY_FAIL)
 #define string_reply(s, len) return create_str_reply((s), len, RPLY_STRING)
 #define ok_reply() return create_empty_reply(RPLY_OK)
 #define nil_reply() return create_empty_reply(RPLY_NIL)

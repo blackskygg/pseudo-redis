@@ -98,7 +98,7 @@ _CMD_PROTO(get)
 
         if(NULL != val_obj) {
                 CHECK_TYPE(val_obj, STRING);
-                len = ((bss_t *)val_obj->val)->len + 1;
+                len = ((bss_t *)val_obj->val)->len;
 
                 string_reply(((bss_t *)val_obj->val)->str, len);
         } else {

@@ -268,6 +268,9 @@ int bss_getbit(const bss_t *bss, size_t offset)
         if(0 == bit)
                 bit = 8;
 
+        /* who knows, redis uses the f**king big-endian */
+        bit = 9 - bit;
+
         if(byte + 1> bss->len)
                 return 0;
         else
@@ -290,6 +293,9 @@ bss_t *bss_setbit(bss_t *bss, size_t offset, uint val)
         /* fall back to the previous byte */
         if(0 == bit)
                 bit = 8;
+
+        /* who knows, redis uses the f**king big-endian */
+        bit = 9 - bit;
 
         if(byte + 1 > bsssize(bss)) {
                 if(NULL == (new_bss = bss_create_empty(byte + 1))) {
