@@ -1127,10 +1127,102 @@ CMD_PROTO(brpoplpush)
 
 CMD_PROTO(lset)
 {
+        CHECK_ARGS(3);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+        bss_int_t index;
+
+        if(0 != bss2int(args[1], &index)) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                FREE_ARG(2);
+                fail_reply(INV_INT);
+        }
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                goto NIL;
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                /* is it empty? */
+                if(0 == list->num)
+                        goto NIL;
+
+                index = (index + list->num) % list->num;
+
+                /* is it out of the scope? */
+                if(index >= list->num)
+                        goto NIL;
+
+                entry = &(list->head);
+                for(int i = 0; i <= index; ++i)
+                        entry = entry->next;
+
+                /* replace it with args[2] */
+                bss_destroy(entry->val);
+                entry->val = args[2];
+
+                FREE_ARG(0);
+                FREE_ARG(1);
+                string_reply(entry->val->str, entry->val->len);
+        }
+
+NIL:
+        FREE_ARG(0);
+        FREE_ARG(1);
+        FREE_ARG(2);
+        nil_reply();
 }
 
 CMD_PROTO(lindex)
 {
+        CHECK_ARGS(2);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+        bss_int_t index;
+
+        if(0 != bss2int(args[1], &index)) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+
+                fail_reply(INV_INT);
+        }
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                goto NIL;
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+
+                /* is it empty? */
+                if(0 == list->num)
+                        goto NIL;
+
+                index = (index + list->num) % list->num;
+
+                /* is it out of the scope? */
+                if(index >= list->num)
+                        goto NIL;
+
+                entry = &(list->head);
+                for(int i = 0; i <= index; ++i)
+                        entry = entry->next;
+
+                FREE_ARG(0);
+                FREE_ARG(1);
+                string_reply(entry->val->str, entry->val->len);
+        }
+
+NIL:
+        FREE_ARG(0);
+        FREE_ARG(1);
+        nil_reply();
 }
 
 CMD_PROTO(ltrim)
@@ -1185,6 +1277,47 @@ CMD_PROTO(llen)
 
 CMD_PROTO(rpoplpush)
 {
+        CHECK_ARGS(2);
+
+        obj_t *list_obj1, *list_obj2;
+        list_t *list1, *list2;
+        list_entry_t *entry;
+
+        /* rpop */
+        if(NULL == (list_obj1 = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                nil_reply();
+        } else {
+                CHECK_TYPE(list_obj1, LIST);
+                list1 = list_obj1->val;
+
+                if(NULL == (entry = list_pop_back(list1))) {
+                        FREE_ARG(0);
+                        FREE_ARG(1);
+                        nil_reply();
+                }
+        }
+        FREE_ARG(0);
+
+        /* lpush */
+        if(NULL == (list_obj2 = dict_look_up(key_dict, args[1]))) {
+                /* list dose not exist, create one */
+                list2 = list_create();
+                list_obj2 = list_create_obj(list2);
+                dict_add(key_dict, args[1], list_obj2);
+
+                list_insert_front(list2, entry);
+        } else {
+                CHECK_TYPE(list_obj2, LIST);
+                list2 = list_obj2->val;
+
+                list_insert_front(list2, entry);
+
+                FREE_ARG(1);
+        }
+
+        string_reply(entry->val->str, entry->val->len);
 }
 
 CMD_PROTO(lpop)

@@ -228,27 +228,41 @@ size_t bss_count_bit(const bss_t *bss)
         return count;
 }
 
-/* append a string after bss, and return the result bss_t pointer */
+/* append a string after bss, and return the result bss_t pointer
+ * it's very likely to double the space of a bss
+ */
 bss_t *bss_append(bss_t *bss, char *data, size_t len)
 {
         bss_t *result;
+        size_t total_len;
         char *str;
 
-        result = bss;
         if(bss->free >= len) {
                 memcpy(bss->str + bss->len, data, len);
                 bss->free -= len;
                 bss->len += len;
                 bss->str[bss->len] = 0;
+                result = bss;
         } else {
-                str = malloc(bss->len + len);
-                if(NULL == str)
+                /* try double the space, if failed, malloc a samller one */
+                total_len = bss->len * 2;
+                result = malloc(sizeof(bss_t) + total_len + 1);
+
+                if(NULL == result) {
+                        total_len = bss->len + len;
+                        result = malloc(sizeof(bss_t) + total_len + 1);
+                }
+                if(NULL == result);
                         return NULL;
 
-                memcpy(str, bss->str, bss->len);
-                memcpy(str + bss->len, data, len);
-                result = bss_set(bss, str, len + bss->len);
-                free(str);
+                memcpy(result->str, bss->str, bss->len);
+                memcpy(result->str + bss->len, data, len);
+
+                result->len = bss->len + len;
+                result->str[result->len] = 0;
+                result->free = total_len - bss->len;
+
+                bss_destroy(bss);
         }
 
         return result;

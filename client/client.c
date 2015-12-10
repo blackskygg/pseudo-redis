@@ -145,6 +145,7 @@ void display_reply(reply_t *reply)
                                 /* Oops, a (nil) */
                                 printf("%d) (nil)\n", index);
                         } else {
+                                printf("%d) ", index);
                                 print_str(pos, len);
 
                                 pos += len;
