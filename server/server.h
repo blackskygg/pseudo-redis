@@ -99,6 +99,7 @@ void reset_reply_arr();
 #define NO_KEY "ERR no such key"
 #define INV_SYNX "ERR syntax error"
 #define TOO_LONG "ERR request or reply too long"
+#define OUT_RANGE "ERR index out of range"
 
 #define fail_reply(s) return create_str_reply((s), strlen(s), RPLY_FAIL)
 #define string_reply(s, len) return create_str_reply((s), len, RPLY_STRING)

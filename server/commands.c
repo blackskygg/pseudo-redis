@@ -1086,10 +1086,44 @@ CMD_PROTO(linsert)
 
 CMD_PROTO(rpop)
 {
+        CHECK_ARGS(1);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                nil_reply();
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                if(NULL == (entry = list_pop_back(list))) {
+                        FREE_ARG(0);
+                        nil_reply();
+                } else {
+                        FREE_ARG(0);
+                        string_reply(entry->val->str, entry->val->len);
+                }
+        }
 }
 
 CMD_PROTO(llen)
 {
+        CHECK_ARGS(1);
+
+        obj_t *list_obj;
+        list_t *list;
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                false_reply();
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+                int_reply(list->num);
+        }
 }
 
 CMD_PROTO(rpoplpush)
@@ -1098,22 +1132,135 @@ CMD_PROTO(rpoplpush)
 
 CMD_PROTO(lpop)
 {
+        CHECK_ARGS(1);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                nil_reply();
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                if(NULL == (entry = list_pop_front(list))) {
+                        FREE_ARG(0);
+                        nil_reply();
+                } else {
+                        FREE_ARG(0);
+                        string_reply(entry->val->str, entry->val->len);
+                }
+        }
 }
 
 CMD_PROTO(rpush)
 {
+        CHECK_ARGS(2);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                /* list dose not exist, create one */
+                list = list_create();
+                list_obj = list_create_obj(list);
+                dict_add(key_dict, args[0], list_obj);
+
+                entry = list_create_entry(args[1]);
+                list_insert_back(list, entry);
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                entry = list_create_entry(args[1]);
+                list_insert_back(list, entry);
+
+                FREE_ARG(0);
+        }
+
+        int_reply(list->num);
 }
 
 CMD_PROTO(lpush)
 {
+        CHECK_ARGS(2);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                /* list dose not exist, create one */
+                list = list_create();
+                list_obj = list_create_obj(list);
+                dict_add(key_dict, args[0], list_obj);
+
+                entry = list_create_entry(args[1]);
+                list_insert_front(list, entry);
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                entry = list_create_entry(args[1]);
+                list_insert_front(list, entry);
+
+                FREE_ARG(0);
+        }
+
+        int_reply(list->num);
 }
 
 CMD_PROTO(rpushx)
 {
+        CHECK_ARGS(2);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+
+                int_reply(0);
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                entry = list_create_entry(args[1]);
+                list_insert_back(list, entry);
+
+                FREE_ARG(0);
+                int_reply(list->num);
+        }
 }
 
 CMD_PROTO(lpushx)
 {
+        CHECK_ARGS(2);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+
+                int_reply(0);
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                entry = list_create_entry(args[1]);
+                list_insert_front(list, entry);
+
+                FREE_ARG(0);
+                int_reply(list->num);
+        }
 }
 
 CMD_PROTO(sadd)
