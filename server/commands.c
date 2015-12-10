@@ -572,6 +572,12 @@ CMD_PROTO(getrange)
                 CHECK_TYPE(str_obj, STRING);
                 bss = str_obj->val;
 
+                /* check empty */
+                if(0 == bss->len) {
+                        FREE_ARGS(0, num);
+                        string_reply(NULL, 0);
+                }
+
                 offset1 = (offset1 + (bss_int_t)bss->len) % bss->len;
                 offset2 = (offset2 + (bss_int_t)bss->len) % bss->len;
 
@@ -1054,6 +1060,57 @@ CMD_PROTO(blpop)
 
 CMD_PROTO(lrange)
 {
+        CHECK_ARGS(3);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+        bss_int_t offset1, offset2;
+
+        /* obtain the two offsets */
+        if(0 != bss2int(args[1], &offset1)
+           || 0 != bss2int(args[2], &offset2)) {
+                FREE_ARGS(0, num);
+                fail_reply(INV_INT);
+        }
+
+        reset_reply_arr();
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, num);
+                arr_reply();
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                /* check empty */
+                if(0 == list->num) {
+                        FREE_ARGS(0, num);
+                        arr_reply();
+                }
+
+                offset1 = (offset1 + list->num) % list->num;
+                offset2 = (offset2 + list->num) % list->num;
+
+                /* check the range */
+                if(offset2 < offset1 || offset1 >= list->num) {
+                        FREE_ARGS(0, num);
+                        arr_reply();
+                }
+
+                /* find the starting point */
+                entry = &(list->head);
+                for(size_t i = 0; i <= offset1; ++i)
+                        entry = entry->next;
+
+                for(size_t i = offset1; i <= offset2 && i < list->num; ++i)
+                {
+                        addto_reply_arr(entry->val);
+                        entry = entry->next;
+                }
+
+                FREE_ARGS(0, num);
+                arr_reply();
+        }
 }
 
 CMD_PROTO(brpop)
