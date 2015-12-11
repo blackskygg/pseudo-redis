@@ -581,9 +581,11 @@ CMD_PROTO(getrange)
 
                 /* regularize the offsets */
                 if(offset1 < 0)
-                        offset1 = (offset1 + (bss_int_t)bss->len) % bss->len;
+                        offset1 = offset1 + (bss_int_t)bss->len;
+                if(offset1 < 0)
+                        offset1 = 0;
                 if(offset2 < 0)
-                        offset2 = (offset2 + (bss_int_t)bss->len) % bss->len;
+                        offset2 = offset2 + (bss_int_t)bss->len;
 
                 /* check the range */
                 if(offset2 < offset1 || offset1 >= bss->len) {
@@ -1090,9 +1092,11 @@ CMD_PROTO(lrange)
 
                 /* regularize the offsets */
                 if(offset1 < 0)
-                        offset1 = (offset1 + list->num) % list->num;
+                        offset1 = offset1 + list->num;
+                if(offset1 < 0)
+                        offset1 = 0;
                 if(offset2 < 0)
-                        offset2 = (offset2 + list->num) % list->num;
+                        offset2 = offset2 + list->num;
 
                 /* check the range */
                 if(offset2 < offset1 || offset1 >= list->num) {
@@ -1235,10 +1239,10 @@ CMD_PROTO(lset)
                 list = list_obj->val;
 
                 if(index < 0)
-                        index = (index + list->num) % list->num;
+                        index = index + list->num;
 
                 /* is it out of the scope? */
-                if(index >= list->num)
+                if(index >= list->num || index < 0)
                         goto NIL;
 
                 entry = &(list->head);
@@ -1282,10 +1286,10 @@ CMD_PROTO(lindex)
                 list = list_obj->val;
 
                 if(index < 0)
-                        index = (index + list->num) % list->num;
+                        index = index + list->num;
 
                 /* is it out of the scope? */
-                if(index >= list->num)
+                if(index >= list->num || index < 0)
                         goto NIL;
 
                 entry = &(list->head);
@@ -1305,6 +1309,67 @@ NIL:
 
 CMD_PROTO(ltrim)
 {
+        CHECK_ARGS(3);
+
+        obj_t *list_obj;
+        list_t *list, *new_list;
+        list_entry_t *entry, *next;
+        bss_int_t offset1, offset2;
+
+        /* obtain the two offsets */
+        if(0 != bss2int(args[1], &offset1)
+           || 0 != bss2int(args[2], &offset2)) {
+                FREE_ARGS(0, num);
+                fail_reply(INV_INT);
+        }
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, num);
+                ok_reply();
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                /* regularize the offsets */
+                if(offset1 < 0)
+                        offset1 = offset1 + list->num;
+                if(offset1 < 0)
+                        offset1 = 0;
+                if(offset2 < 0)
+                        offset2 = offset2 + list->num;
+
+                /* check the range */
+                if(offset2 < offset1 || offset1 >= list->num) {
+                        dict_rm(key_dict, args[0]);
+                        FREE_ARGS(0, num);
+                        ok_reply();
+                }
+
+                /* find the starting point */
+                entry = &(list->head);
+                for(size_t i = 0; i <= offset1; ++i)
+                        entry = entry->next;
+
+                /* fill the new list with elements within the range*/
+                new_list = list_create();
+                while(entry != &(list->head)) {
+                        next = entry->next;
+
+                        list_move_back(entry, list, new_list);
+                        if(offset1++ == offset2)
+                                break;
+
+                        entry = next;
+                }
+
+                /* replace the original list with the new list */
+                list_destroy(list);
+                list_obj->val = new_list;
+
+                FREE_ARGS(0, num);
+                ok_reply();
+        }
+
 }
 
 CMD_PROTO(linsert)
