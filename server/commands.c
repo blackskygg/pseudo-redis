@@ -1088,12 +1088,6 @@ CMD_PROTO(lrange)
                 CHECK_TYPE(list_obj, LIST);
                 list = list_obj->val;
 
-                /* check empty */
-                if(0 == list->num) {
-                        FREE_ARGS(0, num);
-                        arr_reply();
-                }
-
                 /* regularize the offsets */
                 if(offset1 < 0)
                         offset1 = (offset1 + list->num) % list->num;
@@ -1206,6 +1200,11 @@ CMD_PROTO(lrem)
 
                 count = _lrem(list, target, args[2]);
 
+                /* if the list is empty, end it's life */
+                if(0 == list->num)
+                        dict_rm(key_dict, args[0]);
+
+
                 FREE_ARGS(0, 3);
                 int_reply(count);
         }
@@ -1234,10 +1233,6 @@ CMD_PROTO(lset)
         } else {
                 CHECK_TYPE(list_obj, LIST);
                 list = list_obj->val;
-
-                /* is it empty? */
-                if(0 == list->num)
-                        goto NIL;
 
                 if(index < 0)
                         index = (index + list->num) % list->num;
@@ -1286,11 +1281,6 @@ CMD_PROTO(lindex)
                 CHECK_TYPE(list_obj, LIST);
                 list = list_obj->val;
 
-
-                /* is it empty? */
-                if(0 == list->num)
-                        goto NIL;
-
                 if(index < 0)
                         index = (index + list->num) % list->num;
 
@@ -1319,6 +1309,58 @@ CMD_PROTO(ltrim)
 
 CMD_PROTO(linsert)
 {
+        CHECK_ARGS(4);
+
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry, *new_entry;
+        int flag;
+        int direction; /* 0 means before and 1 after */
+
+        if(!strcasecmp(args[1]->str, "before")) {
+                direction = 0;
+        } else if(!strcasecmp(args[1]->str, "after")) {
+                direction = 1;
+        } else {
+                /* a syntax error */
+                FREE_ARGS(0, 4);
+                fail_reply(INV_SYNX);
+        }
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                false_reply();
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                flag = 0;
+                entry = list->head.next;
+                while(entry != &(list->head)) {
+                        if(!bss_cmp(entry->val, args[2])) {
+                                flag = 1;
+                                break;
+                        }
+                        entry = entry->next;
+                }
+
+                if(!flag) {
+                        /* not found */
+                        FREE_ARGS(0, 4);
+                        int_reply(-1);
+                } else {
+                        new_entry = list_create_entry(args[3]);
+
+                        /* insert it */
+                        if(direction)
+                                list_insert_after(list, entry, new_entry);
+                        else
+                                list_insert_before(list, entry, new_entry);
+
+                        FREE_ARGS(0, 3); /* args[3] can't be freed */
+                        int_reply(list->num);
+                }
+        }
 }
 
 CMD_PROTO(rpop)
@@ -1336,13 +1378,14 @@ CMD_PROTO(rpop)
                 CHECK_TYPE(list_obj, LIST);
                 list = list_obj->val;
 
-                if(NULL == (entry = list_pop_back(list))) {
-                        FREE_ARG(0);
-                        nil_reply();
-                } else {
-                        FREE_ARG(0);
-                        string_reply(entry->val->str, entry->val->len);
-                }
+                entry = list_pop_back(list);
+
+                /* if the list is empty, end it's life */
+                if(0 == list->num)
+                        dict_rm(key_dict, args[0]);
+
+                FREE_ARG(0);
+                string_reply(entry->val->str, entry->val->len);
         }
 }
 
@@ -1380,11 +1423,12 @@ CMD_PROTO(rpoplpush)
                 CHECK_TYPE(list_obj1, LIST);
                 list1 = list_obj1->val;
 
-                if(NULL == (entry = list_pop_back(list1))) {
-                        FREE_ARG(0);
-                        FREE_ARG(1);
-                        nil_reply();
-                }
+                entry = list_pop_back(list1);
+
+                /* if the list is empty, end it's life */
+                if(0 == list1->num)
+                        dict_rm(key_dict, args[0]);
+
         }
         FREE_ARG(0);
 
@@ -1423,13 +1467,14 @@ CMD_PROTO(lpop)
                 CHECK_TYPE(list_obj, LIST);
                 list = list_obj->val;
 
-                if(NULL == (entry = list_pop_front(list))) {
-                        FREE_ARG(0);
-                        nil_reply();
-                } else {
-                        FREE_ARG(0);
-                        string_reply(entry->val->str, entry->val->len);
-                }
+                entry = list_pop_front(list);
+
+                /* if the list is empty, end it's life */
+                if(0 == list->num)
+                        dict_rm(key_dict, args[0]);
+
+                FREE_ARG(0);
+                string_reply(entry->val->str, entry->val->len);
         }
 }
 

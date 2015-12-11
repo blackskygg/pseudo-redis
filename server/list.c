@@ -126,6 +126,28 @@ void list_insert_back(list_t *list, list_entry_t *entry)
         list->num++;
 }
 
+/* insert target AFTER entry */
+void list_insert_after(list_t *list, list_entry_t *entry, list_entry_t *target)
+{
+        entry->next->prev = target;
+        target->next = entry->next;
+        entry->next = target;
+        target->prev = entry;
+
+        list->num++;
+}
+
+/* insert target BEFORE entry */
+void list_insert_before(list_t *list, list_entry_t *entry, list_entry_t *target)
+{
+        entry->prev->next = target;
+        target->prev = entry->prev;
+        entry->prev = target;
+        target->next = entry;
+
+        list->num++;
+}
+
 /* remove the first entry in a list and return it
  * returns NULL if the list is empty
  */

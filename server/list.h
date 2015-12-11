@@ -26,16 +26,18 @@ void list_iter(list_t *list, void (*func)(list_entry_t *));
 void list_destroy_entry(list_entry_t *entry);
 void list_insert_front(list_t *list, list_entry_t *entry);
 void list_insert_back(list_t *list, list_entry_t *entry);
+void list_insert_after(list_t *list, list_entry_t *entry, list_entry_t *target);
+void list_insert_before(list_t *list, list_entry_t *entry, list_entry_t *target);
 list_entry_t *list_rm_nf(list_t *list, list_entry_t *entry);
 void list_rm(list_t *list, list_entry_t *entry);
 list_entry_t* list_pop_back(list_t *list);
 list_entry_t* list_pop_front(list_t *list);
 void list_move_back(list_entry_t *entry, list_t *src, list_t *dst);
 void list_move_front(list_entry_t *entry, list_t *src, list_t *dst);
-int list_move_bf(list_t *src, list_t *dst);
-int list_move_fb(list_t *src, list_t *dst);
-int list_move_ff(list_t *src, list_t *dst);
-int list_move_bb(list_t *src, list_t *dst);
+//int list_move_bf(list_t *src, list_t *dst);
+//int list_move_fb(list_t *src, list_t *dst);
+//int list_move_ff(list_t *src, list_t *dst);
+//int list_move_bb(list_t *src, list_t *dst);
 
 #define list_is_empty(list_ptr) (list_ptr->head.next == &(list_ptr->head))
 
