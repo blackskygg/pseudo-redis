@@ -94,14 +94,15 @@ _CMD_PROTO(get)
         size_t len;
 
         val_obj = dict_look_up(dict, args[0]);
-        FREE_ARG(0);
 
         if(NULL != val_obj) {
                 CHECK_TYPE(val_obj, STRING);
                 len = ((bss_t *)val_obj->val)->len;
 
+                FREE_ARG(0);
                 string_reply(((bss_t *)val_obj->val)->str, len);
         } else {
+                FREE_ARG(0);
                 nil_reply();
         }
 }
@@ -578,8 +579,11 @@ CMD_PROTO(getrange)
                         string_reply(NULL, 0);
                 }
 
-                offset1 = (offset1 + (bss_int_t)bss->len) % bss->len;
-                offset2 = (offset2 + (bss_int_t)bss->len) % bss->len;
+                /* regularize the offsets */
+                if(offset1 < 0)
+                        offset1 = (offset1 + (bss_int_t)bss->len) % bss->len;
+                if(offset2 < 0)
+                        offset2 = (offset2 + (bss_int_t)bss->len) % bss->len;
 
                 /* check the range */
                 if(offset2 < offset1 || offset1 >= bss->len) {
@@ -1029,6 +1033,7 @@ CMD_PROTO(hkeys)
 
         CHECK_TYPE(val_obj, HASH);
 
+        FREE_ARG(0);
         if(0 != dict_iter((dict_t *)val_obj->val, addkey_to_arr, NULL))
                 fail_reply(TOO_LONG);
         else
@@ -1047,6 +1052,7 @@ CMD_PROTO(hvals)
 
         CHECK_TYPE(val_obj, HASH);
 
+        FREE_ARG(0);
         if(0 != dict_iter((dict_t *)val_obj->val, addval_to_arr, NULL))
                 fail_reply(TOO_LONG);
         else
@@ -1088,8 +1094,11 @@ CMD_PROTO(lrange)
                         arr_reply();
                 }
 
-                offset1 = (offset1 + list->num) % list->num;
-                offset2 = (offset2 + list->num) % list->num;
+                /* regularize the offsets */
+                if(offset1 < 0)
+                        offset1 = (offset1 + list->num) % list->num;
+                if(offset2 < 0)
+                        offset2 = (offset2 + list->num) % list->num;
 
                 /* check the range */
                 if(offset2 < offset1 || offset1 >= list->num) {
@@ -1117,8 +1126,89 @@ CMD_PROTO(brpop)
 {
 }
 
+static int64_t _lrem(list_t *list, bss_int_t target, bss_t* bss)
+{
+        list_entry_t *entry, *next;
+        int64_t count;
+
+        count = 0;
+        if(target > 0) {
+                entry = &(list->head);
+                next = entry->next;
+                while(next != &(list->head)) {
+                        entry = next;
+                        next = entry->next;
+
+                        if(!bss_cmp(entry->val, bss)
+                           && count < target) {
+                                list_rm(list, entry);
+
+                                if(++count == target)
+                                        break;
+                        }
+
+                }
+        } else if (0 == target) {
+                entry = &(list->head);
+                next = entry->next;
+                while(next != &(list->head)) {
+                        entry = next;
+                        next = entry->next;
+
+                        if(!bss_cmp(entry->val, bss)) {
+                                list_rm(list, entry);
+                                count++;
+                        }
+                }
+        } else {
+                target = -target;
+
+                entry = &(list->head);
+                next = entry->prev;
+                while(next != &(list->head)) {
+                        entry = next;
+                        next = entry->prev;
+
+                        if(!bss_cmp(entry->val, bss)
+                           && count < target) {
+                                list_rm(list, entry);
+
+                                if(++count == target)
+                                        break;
+                        }
+                }
+
+        }
+
+        return count;
+}
+
 CMD_PROTO(lrem)
 {
+        CHECK_ARGS(3);
+
+        obj_t *list_obj;
+        list_t *list;
+        bss_int_t target;
+        int64_t count;
+
+        if(0 != bss2int(args[1], &target)) {
+                FREE_ARGS(0, 3);
+                fail_reply(INV_INT);
+        }
+
+        if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, 3);
+                false_reply();
+        } else {
+                CHECK_TYPE(list_obj, LIST);
+                list = list_obj->val;
+
+                count = _lrem(list, target, args[2]);
+
+                FREE_ARGS(0, 3);
+                int_reply(count);
+        }
 }
 
 CMD_PROTO(brpoplpush)
@@ -1135,9 +1225,7 @@ CMD_PROTO(lset)
         bss_int_t index;
 
         if(0 != bss2int(args[1], &index)) {
-                FREE_ARG(0);
-                FREE_ARG(1);
-                FREE_ARG(2);
+                FREE_ARGS(0, 3);
                 fail_reply(INV_INT);
         }
 
@@ -1151,7 +1239,8 @@ CMD_PROTO(lset)
                 if(0 == list->num)
                         goto NIL;
 
-                index = (index + list->num) % list->num;
+                if(index < 0)
+                        index = (index + list->num) % list->num;
 
                 /* is it out of the scope? */
                 if(index >= list->num)
@@ -1171,9 +1260,7 @@ CMD_PROTO(lset)
         }
 
 NIL:
-        FREE_ARG(0);
-        FREE_ARG(1);
-        FREE_ARG(2);
+        FREE_ARGS(0, 3);
         nil_reply();
 }
 
@@ -1204,7 +1291,8 @@ CMD_PROTO(lindex)
                 if(0 == list->num)
                         goto NIL;
 
-                index = (index + list->num) % list->num;
+                if(index < 0)
+                        index = (index + list->num) % list->num;
 
                 /* is it out of the scope? */
                 if(index >= list->num)

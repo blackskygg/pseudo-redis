@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -100,16 +101,18 @@ int send_request(char name[NAME_LEN], char *str, size_t len)
         write(fd, request, sizeof(request_t) + len);
 }
 
-void print_str(uint8_t *data, size_t len)
+void print_str(uint8_t *data, size_t len, bool quote)
 {
-        putchar('\"');
+        if(quote)
+                putchar('\"');
         for(size_t i = 0; i < len; ++i) {
-                if(isgraph(data[i]))
+                if(isgraph(data[i]) || ' ' == data[i])
                         putchar(data[i]);
                 else
                         printf("\\x%02x", data[i]);
         }
-        putchar('\"');
+        if(quote)
+                putchar('\"');
         putchar('\n');
 }
 
@@ -124,13 +127,14 @@ void display_reply(reply_t *reply)
                 printf("OK\n");
                 break;
         case RPLY_FAIL:
-                printf("(error)%s\n", reply->data);
+                printf("(error) ");
+                print_str(reply->data, reply->len, false);
                 break;
         case RPLY_STRING:
-                print_str(reply->data, reply->len);
+                print_str(reply->data, reply->len, true);
                 break;
         case RPLY_INT:
-                printf("(interger)%d\n", be64toh(*(int64_t*)reply->data));
+                printf("(interger) %d\n", be64toh(*(int64_t*)reply->data));
                 break;
         case RPLY_NIL:
                 printf("(nil)\n");
@@ -146,7 +150,7 @@ void display_reply(reply_t *reply)
                                 printf("%d) (nil)\n", index);
                         } else {
                                 printf("%d) ", index);
-                                print_str(pos, len);
+                                print_str(pos, len, true);
 
                                 pos += len;
                         }
@@ -158,7 +162,9 @@ void display_reply(reply_t *reply)
 
                 break;
         case RPLY_TYPE:
-                printf("%s\n", type_str[reply->data[0]]);
+                print_str(type_str[reply->data[0]],
+                          strlen(type_str[reply->data[0]]),
+                          false);
                 break;
         default:
                 break;
