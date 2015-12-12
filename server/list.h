@@ -10,6 +10,7 @@ struct list_entry {
         struct list_entry *prev;
         bss_t *val;
 };
+
 typedef struct list_entry list_entry_t;
 
 struct list {

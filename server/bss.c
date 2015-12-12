@@ -176,10 +176,8 @@ int bss2int(const bss_t *bss, bss_int_t *result)
         errno = 0;
         *result = strtoll(bss->str, &end_ptr, 10);
 
-        if((ERANGE == errno) || ( end_ptr != (bss->str + bss->len) ) ) {
-                perror(" ");
+        if((ERANGE == errno) || ( end_ptr != (bss->str + bss->len) ) )
                 return E_INV_INT;
-        }
 
         return 0;
 }

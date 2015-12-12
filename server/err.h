@@ -12,7 +12,7 @@
 #define E_TOO_LONG  -8
 
 #define E_NET_ERR   -9
-
-#define E_UNKNOWN   -10
+#define E_BLOCKED   -10
+#define E_UNKNOWN   -11
 
 #endif

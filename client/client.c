@@ -17,21 +17,23 @@
 #define NAME_LEN 16
 
 /* the reply types
- * NOTE : the arr protocal is simple : (len|val) denotes an element
- * and if len is 0, the whole array is ended
- * else if len is MAX_RPLY_SIZE, the element is (nil)
- * else ... it's what it is
+ * NOTE : the arr protocal is simple : (type|len|val) denotes an element
  */
-#define RPLY_COMMAND 0
-#define RPLY_OK 1
-#define RPLY_NIL 2
-#define RPLY_FAIL 3
-#define RPLY_INT 4
-#define RPLY_FLOAT 5
-#define RPLY_STRING 6
-#define RPLY_ARR 7
-#define RPLY_TYPE 8
-
+#define RPLY_COMMAND 0x00
+#define RPLY_OK 0x01
+#define RPLY_NIL 0x02
+#define RPLY_FAIL 0x03
+#define RPLY_INT 0x04
+#define RPLY_FLOAT 0x05
+#define RPLY_STRING 0x06
+#define RPLY_ARR 0x07
+#define RPLY_TYPE 0x08
+/* types for bsses in the arr reply */
+#define STR_NORMAL 0x00
+#define STR_NIL 0x01
+#define STR_END 0x02
+#define STR_NOT_QUOTED 0x04
+#define STR_NI 0x08
 /* type identifiers */
 #define STRING 0
 #define INTEGER 1
@@ -121,6 +123,7 @@ void display_reply(reply_t *reply)
         int index = 1;
         uint32_t len = 0;
         uint8_t *pos = reply->data;
+        uint8_t type;
 
         switch(reply->reply_type) {
         case RPLY_OK:
@@ -141,19 +144,30 @@ void display_reply(reply_t *reply)
                 break;
         case RPLY_ARR:
                 for(;;) {
-                        if(! (len = *(uint32_t *)pos))
-                                break;
-                        pos += sizeof(len);
+                        type = *pos++;
 
-                        if(MAX_RPLY_SIZE == len) {
-                                /* Oops, a (nil) */
-                                printf("%d) (nil)\n", index);
-                        } else {
+                        if(STR_END & type)
+                                break;
+
+                        if(!(STR_NI & type))
                                 printf("%d) ", index);
+
+                        if(STR_NIL & type) {
+                                printf("(nil)\n", index);
+                        } else if(STR_NOT_QUOTED & type) {
+                                len = *(uint32_t *)pos;
+                                pos += sizeof(len);
+                                print_str(pos, len, false);
+
+                                pos += len;
+                        } else {
+                                len = *(uint32_t *)pos;
+                                pos += sizeof(len);
                                 print_str(pos, len, true);
 
                                 pos += len;
                         }
+
                         index++;
                 }
 

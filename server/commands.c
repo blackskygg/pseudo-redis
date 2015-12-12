@@ -38,6 +38,9 @@
 /* <--!!! this comment applies too ALL the functions in this file-->
  * the xxx_reply() calls are actually marcros
  * and they ALL imply a "return" statement
+ * for non blocking functions, they have to make up an reply completely
+ * for blocking functions, they only report whether they're blocked and
+ * the result that they finally get
  */
 
 _CMD_PROTO(del)
@@ -70,19 +73,19 @@ _CMD_PROTO(exists)
 /* helper function used by dict_iter to add keys to an array */
 static int addkey_to_arr(const dict_iter_t *dict_iter, void *dummy)
 {
-        return addto_reply_arr(dict_iter->curr->key);
+        return addto_reply_arr(dict_iter->curr->key, STR_NORMAL);
 }
 
 static int addval_to_arr(const dict_iter_t *dict_iter, void *dummy)
 {
-        return addto_reply_arr((bss_t *)dict_iter->curr->val->val);
+        return addto_reply_arr((bss_t *)dict_iter->curr->val->val, STR_NORMAL);
 }
 
 static int add_key_val_to_arr(const dict_iter_t *dict_iter, void *dummy)
 {
 
-        if(0 != addto_reply_arr(dict_iter->curr->key) ||
-           0 != addto_reply_arr((bss_t *)dict_iter->curr->val->val))
+        if(0 != addto_reply_arr(dict_iter->curr->key, STR_NORMAL) ||
+           0 != addto_reply_arr((bss_t *)dict_iter->curr->val->val, STR_NORMAL))
                 return E_TOO_LONG;
 }
 
@@ -186,9 +189,9 @@ _CMD_PROTO(mget)
                 tar_obj = dict_look_up(dict, args[i]);
 
                 if((NULL != tar_obj) && (STRING == tar_obj->type))
-                        ret = addto_reply_arr(tar_obj->val);
+                        ret = addto_reply_arr(tar_obj->val, STR_NORMAL);
                 else
-                        ret = addto_reply_arr(0);
+                        ret = addto_reply_arr(NULL, STR_NIL);
 
                 if(ret != 0) {
                         FREE_ARGS(0, num);
@@ -836,7 +839,7 @@ CMD_PROTO(hmget)
 
                 reset_reply_arr();
                 for(int i = 1; i < num; ++i) {
-                        if(0 != (ret = addto_reply_arr(NULL))) {
+                        if(0 != (ret = addto_reply_arr(NULL, STR_NIL))) {
                                 fail_reply(TOO_LONG);
                         }
                 }
@@ -1064,6 +1067,52 @@ CMD_PROTO(hvals)
 
 CMD_PROTO(blpop)
 {
+        CHECK_ARGS_GE(1);
+
+        int flag;  /* blocked? */
+        dict_iter_t iter;
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+        size_t i;
+
+        /* look around for available food */
+        flag = 0;
+        for(i = 0; i < num; ++i) {
+                iter = _dict_look_up(key_dict, args[i]);
+                if(NULL != iter.curr) {
+                        list_obj = iter.curr->val;
+                        CHECK_TYPE(list_obj, LIST);
+
+                        /* got an entry available */
+                        list = list_obj->val;
+                        entry = list_pop_front(list);
+
+                        /* if the list is empty, end it's life */
+                        if(0 == list->num)
+                                dict_rm(key_dict, args[0]);
+
+
+                        flag = 1;
+                        break;
+                }
+        }
+
+        reset_reply_arr();
+        if(flag) {
+                /* ok, fill the information and let the caller
+                 * wrap all the things up
+                 */
+                addto_reply_arr(args[0], STR_NI | NEED_FREE);
+                addto_reply_arr(entry->val, STR_NI | NEED_FREE);
+
+                FREE_ARGS(1, num);
+                return 0;
+        } else {
+                FREE_ARGS(0, num);
+                return E_BLOCKED;
+        }
+
 }
 
 CMD_PROTO(lrange)
@@ -1111,7 +1160,7 @@ CMD_PROTO(lrange)
 
                 for(size_t i = offset1; i <= offset2 && i < list->num; ++i)
                 {
-                        addto_reply_arr(entry->val);
+                        addto_reply_arr(entry->val, STR_NORMAL);
                         entry = entry->next;
                 }
 
@@ -1122,12 +1171,57 @@ CMD_PROTO(lrange)
 
 CMD_PROTO(brpop)
 {
+        CHECK_ARGS_GE(1);
+
+        int flag;  /* blocked? */
+        dict_iter_t iter;
+        obj_t *list_obj;
+        list_t *list;
+        list_entry_t *entry;
+        size_t i;
+
+        /* look around for available food */
+        flag = 0;
+        for(i = 0; i < num; ++i) {
+                iter = _dict_look_up(key_dict, args[i]);
+                if(NULL != iter.curr) {
+                        list_obj = iter.curr->val;
+                        CHECK_TYPE(list_obj, LIST);
+
+                        /* got an entry available */
+                        list = list_obj->val;
+                        entry = list_pop_back(list);
+
+                        /* if the list is empty, end it's life */
+                        if(0 == list->num)
+                                dict_rm(key_dict, args[0]);
+
+
+                        flag = 1;
+                        break;
+                }
+        }
+
+        reset_reply_arr();
+        if(flag) {
+                /* ok, fill the information and let the caller
+                 * wrap all the things up
+                 */
+                addto_reply_arr(args[0], NEED_FREE | STR_NI);
+                addto_reply_arr(entry->val, NEED_FREE | STR_NI);
+
+                FREE_ARGS(1, num);
+                return 0;
+        } else {
+                FREE_ARGS(0, num);
+                return E_BLOCKED;
+        }
 }
 
-static int64_t _lrem(list_t *list, bss_int_t target, bss_t* bss)
+static int32_t _lrem(list_t *list, bss_int_t target, bss_t* bss)
 {
         list_entry_t *entry, *next;
-        int64_t count;
+        int32_t count;
 
         count = 0;
         if(target > 0) {
@@ -1188,7 +1282,7 @@ CMD_PROTO(lrem)
         obj_t *list_obj;
         list_t *list;
         bss_int_t target;
-        int64_t count;
+        int32_t count;
 
         if(0 != bss2int(args[1], &target)) {
                 FREE_ARGS(0, 3);
@@ -1216,6 +1310,50 @@ CMD_PROTO(lrem)
 
 CMD_PROTO(brpoplpush)
 {
+        CHECK_ARGS(2);
+
+        obj_t *list_obj1, *list_obj2;
+        list_t *list1, *list2;
+        list_entry_t *entry;
+
+        /* rpop */
+        if(NULL == (list_obj1 = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                return E_BLOCKED;
+        } else {
+                CHECK_TYPE(list_obj1, LIST);
+                list1 = list_obj1->val;
+
+                entry = list_pop_back(list1);
+
+                /* if the list is empty, end it's life */
+                if(0 == list1->num)
+                        dict_rm(key_dict, args[0]);
+
+        }
+        FREE_ARG(0);
+
+        /* lpush */
+        if(NULL == (list_obj2 = dict_look_up(key_dict, args[1]))) {
+                /* list dose not exist, create one */
+                list2 = list_create();
+                list_obj2 = list_create_obj(list2);
+                dict_add(key_dict, args[1], list_obj2);
+
+                list_insert_front(list2, entry);
+        } else {
+                CHECK_TYPE(list_obj2, LIST);
+                list2 = list_obj2->val;
+
+                list_insert_front(list2, entry);
+
+                FREE_ARG(1);
+        }
+
+        reset_reply_arr();
+        addto_reply_arr(entry->val, STR_NI);
+
 }
 
 CMD_PROTO(lset)
@@ -1435,6 +1573,7 @@ CMD_PROTO(rpop)
         obj_t *list_obj;
         list_t *list;
         list_entry_t *entry;
+        int ret_val;
 
         if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
                 FREE_ARG(0);
@@ -1450,7 +1589,11 @@ CMD_PROTO(rpop)
                         dict_rm(key_dict, args[0]);
 
                 FREE_ARG(0);
-                string_reply(entry->val->str, entry->val->len);
+                ret_val = create_str_reply(entry->val->str,
+                                           entry->val->len, RPLY_STRING);
+                list_destroy_entry(entry);
+
+                return ret_val;
         }
 }
 
@@ -1524,6 +1667,7 @@ CMD_PROTO(lpop)
         obj_t *list_obj;
         list_t *list;
         list_entry_t *entry;
+        int ret_val;
 
         if(NULL == (list_obj = dict_look_up(key_dict, args[0]))) {
                 FREE_ARG(0);
@@ -1538,14 +1682,19 @@ CMD_PROTO(lpop)
                 if(0 == list->num)
                         dict_rm(key_dict, args[0]);
 
+                ret_val = create_str_reply(entry->val->str,
+                                           entry->val->len, RPLY_STRING);
+
+                list_destroy_entry(entry);
                 FREE_ARG(0);
-                string_reply(entry->val->str, entry->val->len);
+                return ret_val;
+
         }
 }
 
 CMD_PROTO(rpush)
 {
-        CHECK_ARGS(2);
+        CHECK_ARGS_GE(2);
 
         obj_t *list_obj;
         list_t *list;
@@ -1556,17 +1705,15 @@ CMD_PROTO(rpush)
                 list = list_create();
                 list_obj = list_create_obj(list);
                 dict_add(key_dict, args[0], list_obj);
-
-                entry = list_create_entry(args[1]);
-                list_insert_back(list, entry);
         } else {
                 CHECK_TYPE(list_obj, LIST);
                 list = list_obj->val;
-
-                entry = list_create_entry(args[1]);
-                list_insert_back(list, entry);
-
                 FREE_ARG(0);
+        }
+
+        for(int i = 1; i < num; ++i) {
+                entry = list_create_entry(args[i]);
+                list_insert_back(list, entry);
         }
 
         int_reply(list->num);
@@ -1574,7 +1721,7 @@ CMD_PROTO(rpush)
 
 CMD_PROTO(lpush)
 {
-        CHECK_ARGS(2);
+        CHECK_ARGS_GE(2);
 
         obj_t *list_obj;
         list_t *list;
@@ -1585,17 +1732,15 @@ CMD_PROTO(lpush)
                 list = list_create();
                 list_obj = list_create_obj(list);
                 dict_add(key_dict, args[0], list_obj);
-
-                entry = list_create_entry(args[1]);
-                list_insert_front(list, entry);
         } else {
                 CHECK_TYPE(list_obj, LIST);
                 list = list_obj->val;
-
-                entry = list_create_entry(args[1]);
-                list_insert_front(list, entry);
-
                 FREE_ARG(0);
+        }
+
+        for(int i = 1; i < num; ++i) {
+                entry = list_create_entry(args[i]);
+                list_insert_front(list, entry);
         }
 
         int_reply(list->num);
