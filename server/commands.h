@@ -10,6 +10,12 @@
 #define _CMD_BI_PROTO(name1, name2)                                \
         int _##name1##name2##_command(dict_t *dict, bss_t *args[], \
                                       size_t num, int type)
+/* these are for the 'type' field of the BI functions */
+#define LEFT_OP 1
+#define RIGHT_OP 0
+#define NEG_OP -1
+#define POS_OP 1
+
 CMD_PROTO(del);
 CMD_PROTO(exists);
 CMD_PROTO(randomkey);
