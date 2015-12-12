@@ -128,55 +128,6 @@ _CMD_PROTO(set)
 
 }
 
-_CMD_PROTO(incrby)
-{
-        CHECK_ARGS(2);
-
-        obj_t *str_obj;
-        bss_int_t count;
-        bss_int_t number;
-
-        /* first check args[1] */
-        if(0 != bss2int(args[1], &number))
-                goto ERR_INV_INT;
-
-        str_obj = dict_look_up(dict, args[0]);
-
-        /* does it exist? */
-        if(NULL == str_obj) {
-                /* create a new entry and set it to args[1] */
-                CHECK_NULL(str_obj = bss_create_obj(args[1]));
-                if(0 != dict_add(dict, args[0], str_obj)) {
-                        FREE_ARG(0);
-                        FREE_ARG(1);
-                        fail_reply(MEM_OUT);
-                }
-
-                int_reply(number);
-        } else {
-                CHECK_TYPE(str_obj, STRING);
-
-                /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
-                        goto ERR_INV_INT;
-
-                /* overflow? */
-                if(bss_incr((bss_t*)(str_obj->val), number) != 0)
-                        goto ERR_INV_INT;
-
-                count += number;
-                FREE_ARG(0);
-                FREE_ARG(1);
-                int_reply(count);
-        }
-
-ERR_INV_INT:
-        FREE_ARG(0);
-        FREE_ARG(1);
-        fail_reply(INV_INT);
-
-}
-
 _CMD_PROTO(mget)
 {
         CHECK_ARGS_GE(1);
@@ -203,36 +154,41 @@ _CMD_PROTO(mget)
         arr_reply();
 }
 
-_CMD_PROTO(decrby)
+_CMD_BI_PROTO(decrby, incrby)
 {
-                CHECK_ARGS(2);
+        CHECK_ARGS(2);
 
         obj_t *str_obj;
         bss_int_t count;
         bss_int_t number;
+        char str_num[BSS_MIN_LEN];
+        size_t num_len;
 
         /* first check args[1] */
         if(0 != bss2int(args[1], &number))
                 goto ERR_INV_INT;
 
 
-        str_obj = dict_look_up(dict, args[0]);
-
         /* does it exist? */
+        str_obj = dict_look_up(dict, args[0]);
         if(NULL == str_obj) {
                 /* create a new entry and set it to args[1] */
-                sprintf(args[1]->str, "%d", -number);
-                args[1]->len++;
+                if(-1 == type) {
+                        num_len = sprintf(str_num, "%d", -number);
+                        bss_set(args[1], str_num, num_len);
+                }
 
                 CHECK_NULL(str_obj = bss_create_obj(args[1]));
-
                 if(0 != dict_add(dict, args[0], str_obj)) {
                         FREE_ARG(0);
                         FREE_ARG(1);
                         fail_reply(MEM_OUT);
                 }
 
-                int_reply(-number);
+                if(-1 == type)
+                        int_reply(-number);
+                else
+                        int_reply(number);
         } else {
                 CHECK_TYPE(str_obj, STRING);
 
@@ -240,10 +196,19 @@ _CMD_PROTO(decrby)
                 if(bss2int((bss_t*)(str_obj->val), &count) != 0)
                         goto ERR_INV_INT;
                 /* overflow? */
-                if(bss_decr((bss_t*)(str_obj->val), number) != 0)
-                        goto ERR_INV_INT;
+                if(-1 == type) {
+                        if(bss_decr((bss_t*)(str_obj->val), number) != 0)
+                                goto ERR_INV_INT;
+                } else {
+                        if(bss_incr((bss_t*)(str_obj->val), number) != 0)
+                                goto ERR_INV_INT;
 
-                count -= number;
+                }
+
+                if(-1 == type)
+                        count -= number;
+                else
+                        count += number;
                 FREE_ARG(0);
                 FREE_ARG(1);
                 int_reply(count);
@@ -253,6 +218,17 @@ ERR_INV_INT:
         FREE_ARG(0);
         FREE_ARG(1);
         fail_reply(INV_INT);
+
+}
+
+_CMD_PROTO(decrby)
+{
+        return _decrbyincrby_command(dict, args, num, -1);
+}
+
+_CMD_PROTO(incrby)
+{
+        return _decrbyincrby_command(dict, args, num, 1);
 }
 
 _CMD_PROTO(setnx)
@@ -289,6 +265,16 @@ CMD_PROTO(exists)
 
 CMD_PROTO(randomkey)
 {
+        CHECK_ARGS(0);
+
+        dict_entry_t *entry;
+
+        if(0 == key_dict->entry_num) {
+                nil_reply();
+        } else {
+                entry = dict_random_elem(key_dict);
+                string_reply(entry->key->str, entry->key->len);
+        }
 }
 
 
@@ -609,99 +595,20 @@ CMD_PROTO(incr)
 {
         CHECK_ARGS(1);
 
-        obj_t *str_obj;
-        bss_t *bss;
-        bss_int_t count;
+        bss_t *bss = bss_create("1", 1);
+        args[num++] = bss;
 
-        str_obj = dict_look_up(key_dict, args[0]);
-
-        /* does it exist? */
-        if(NULL == str_obj) {
-                /* create a new entry and set it to args[1] */
-                CHECK_NULL(bss = bss_create("1", 1));
-                if(NULL == (str_obj = bss_create_obj(bss)))
-                        goto ERR_MEM_OUT;
-
-                if(0 != dict_add(key_dict, args[0], str_obj))
-                        goto ERR_MEM_OUT;
-
-                int_reply(1);
-        } else {
-                CHECK_TYPE(str_obj, STRING);
-
-                /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
-                        goto ERR_INV_INT;
-
-                /* overflow? */
-                if(bss_incr((bss_t*)(str_obj->val), 1) != 0)
-                        goto ERR_INV_INT;
-
-
-                count ++;
-                FREE_ARG(0);
-                int_reply(count);
-        }
-
-ERR_MEM_OUT:
-        free(bss);
-        FREE_ARG(0);
-        fail_reply(MEM_OUT);
-
-ERR_INV_INT:
-        FREE_ARG(0);
-        fail_reply(INV_INT);
-
+        return incrby_command(args, num);
 }
 
 CMD_PROTO(decr)
 {
         CHECK_ARGS(1);
 
-        obj_t *str_obj;
-        bss_t *bss;
-        bss_int_t count;
+        bss_t *bss = bss_create("1", 1);
+        args[num++] = bss;
 
-        str_obj = dict_look_up(key_dict, args[0]);
-
-        /* does it exist? */
-        if(NULL == str_obj) {
-                /* create a new entry and set it to args[1] */
-                CHECK_NULL(bss = bss_create("-1", 2));
-                if(NULL == (str_obj = bss_create_obj(bss))) {
-                        free(bss);
-                        goto ERR_MEM_OUT;
-                }
-
-                if(0 != dict_add(key_dict, args[0], str_obj)) {
-                        free(bss);
-                        goto ERR_MEM_OUT;
-                }
-
-                int_reply(-1);
-        } else {
-                CHECK_TYPE(str_obj, STRING);
-
-                /* is it a valid number? */
-                if(bss2int((bss_t*)(str_obj->val), &count) != 0)
-                        goto ERR_INV_INT;
-                /* overflow? */
-                if(bss_decr((bss_t*)(str_obj->val), 1) != 0)
-                        goto ERR_INV_INT;
-
-                count --;
-                FREE_ARG(0);
-                int_reply(count);
-        }
-
-ERR_MEM_OUT:
-        FREE_ARGS(0, num);
-        fail_reply(MEM_OUT);
-
-ERR_INV_INT:
-        FREE_ARG(0);
-        fail_reply(INV_INT);
-
+        return decrby_command(args, num);
 }
 
 CMD_PROTO(incrby)
@@ -1798,6 +1705,34 @@ CMD_PROTO(lpushx)
 
 CMD_PROTO(sadd)
 {
+        CHECK_ARGS_GE(2);
+
+        obj_t *set_obj;
+        dict_t *set;
+        size_t count;
+
+        if(NULL == (set_obj = dict_look_up(key_dict, args[0]))) {
+                /* create a new set */
+                set = dict_create(NEW_DICT_POW);
+                set_obj = set_create_obj(set);
+                dict_add(key_dict, args[0], set_obj);
+        } else {
+                CHECK_TYPE(set_obj, SET);
+                set = set_obj->val;
+                FREE_ARG(0);
+        }
+
+        count = 0;
+        for(int i = 1; i < num; ++i) {
+                if(NULL == dict_look_up(set, args[i])) {
+                        set_add(set, args[i]);
+                        count++;
+                } else {
+                        FREE_ARG(i);
+                }
+        }
+
+        int_reply(count);
 }
 
 CMD_PROTO(smove)
@@ -1818,7 +1753,6 @@ CMD_PROTO(scard)
                 FREE_ARG(0);
                 int_reply(((dict_t *)val_obj->val)->entry_num);
         }
-
 }
 
 CMD_PROTO(spop)
@@ -1831,6 +1765,41 @@ CMD_PROTO(sdiff)
 
 CMD_PROTO(srandmember)
 {
+        if(1 != num &&  2 != num) {
+                FREE_ARGS(0, num);
+                fail_reply(INV_ARG);
+        }
+
+        obj_t *set_obj;
+        bss_int_t count;
+        dict_entry_t *entry;
+
+        if(bss2int(args[1], &count)) {
+                FREE_ARGS(0, num);
+                fail_reply(INV_INT);
+        }
+
+        if(2 == num) {
+                if(bss2int(args[1], &count)) {
+                        FREE_ARGS(0, num);
+                        fail_reply(INV_INT);
+                }
+        }
+
+        reset_reply_arr();
+        if(NULL == (set_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, num);
+                if(2 == num)
+                        arr_reply();
+                else
+                        nil_reply();
+        }
+
+        CHECK_TYPE(set_obj, SET);
+        if(2 == num) {
+
+        }
+
 }
 
 CMD_PROTO(srem)
@@ -1851,9 +1820,54 @@ CMD_PROTO(sunion)
 
 CMD_PROTO(sismember)
 {
+        CHECK_ARGS(2);
+
+        obj_t *set_obj;
+        dict_t *set;
+
+        if(NULL == (set_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+                FREE_ARG(1);
+                false_reply();
+        } else {
+                CHECK_TYPE(set_obj, SET);
+                set = set_obj->val;
+                FREE_ARG(0);
+
+                if(NULL == dict_look_up(set, args[1])) {
+                        FREE_ARG(1);
+                        false_reply();
+                } else {
+                        FREE_ARG(1);
+                        true_reply();
+                }
+
+        }
+}
+
+int smembers_callback(const dict_iter_t *dict_iter, void *data)
+{
+        addto_reply_arr(dict_iter->curr->key, STR_NORMAL);
 }
 
 CMD_PROTO(smembers)
 {
+        CHECK_ARGS(1);
+
+        obj_t *set_obj;
+        dict_t *set;
+
+        reset_reply_arr();
+        if(NULL == (set_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARG(0);
+        } else {
+                CHECK_TYPE(set_obj, SET);
+                set = set_obj->val;
+                FREE_ARG(0);
+
+                dict_iter(set, smembers_callback, NULL);
+        }
+
+        arr_reply();
 }
 

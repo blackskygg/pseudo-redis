@@ -4,9 +4,12 @@
 #include "server.h"
 
 #define CMD_PROTO(name) int name##_command(bss_t *args[], size_t num)
-#define _CMD_PROTO(name) int _##name##_command(dict_t *dict, \
-                                                   bss_t *args[], size_t num)
-
+#define _CMD_PROTO(name) int _##name##_command(dict_t *dict,      \
+                                               bss_t *args[],     \
+                                               size_t num)
+#define _CMD_BI_PROTO(name1, name2)                                \
+        int _##name1##name2##_command(dict_t *dict, bss_t *args[], \
+                                      size_t num, int type)
 CMD_PROTO(del);
 CMD_PROTO(exists);
 CMD_PROTO(randomkey);

@@ -65,6 +65,18 @@ obj_t *dict_create_obj(const void *data)
         return obj_ptr;
 }
 
+obj_t *set_create_obj(const void *data)
+{
+        obj_t *obj_ptr = dict_create_obj(data);
+
+        if(NULL == obj_ptr)
+                return NULL;
+
+        obj_ptr->type = SET;
+
+        return obj_ptr;
+}
+
 /* iterate over evry entry, and perform func on it;
  * this function promises a safe iteration,
  *  so you can delete entries during the call
@@ -106,7 +118,8 @@ static void destroy_entry(const dict_iter_t *iter)
          * for we'll keep looking forward and will never look back
          */
         free(iter->curr->key);
-        iter->curr->val->op->destroy(iter->curr->val);
+        if(SET_VAL_PTR != iter->curr->val)
+                iter->curr->val->op->destroy(iter->curr->val);
         free(iter->curr);
 }
 
@@ -360,6 +373,32 @@ int dict_expand(dict_t *dict, uint8_t power)
         return 0;
 }
 #endif /*DICT_RESIZE*/
+
+dict_entry_t *dict_random_elem(dict_t *dict)
+{
+        uint32_t hash;
+        dict_entry_t *he, *orighe;
+        size_t listlen, listele;
+
+        srandom(time(NULL));
+        do {
+                hash = random() & dict->bit_mask;
+                he = dict->hash_tbl[hash];
+        } while(he == NULL);
+
+        listlen = 0;
+        orighe = he;
+        while(he) {
+                he = he->next;
+                listlen++;
+        }
+
+        listele = random() % listlen;
+        he = orighe;
+        while(listele--)
+                he = he->next;
+        return he;
+}
 
 /* this function is borrowed from redis's source code */
 /* MurmurHash2, by Austin Appleby
