@@ -1656,6 +1656,13 @@ CMD_PROTO(lpushx)
         _lpushrpush_command(NULL, args, num, LEFT_OP);
 }
 
+/* a callback to duplicate an existing set */
+int dict_cpy_callback(const dict_iter_t *iter, void *data)
+{
+        dict_add((dict_t *)data, iter->curr->key, SET_VAL_PTR);
+        return 0;
+}
+
 CMD_PROTO(sadd)
 {
         CHECK_ARGS_GE(2);
@@ -1690,6 +1697,41 @@ CMD_PROTO(sadd)
 
 CMD_PROTO(smove)
 {
+        CHECK_ARGS(3);
+
+        obj_t *src_obj, *dst_obj;
+        dict_t *src_set, *dst_set;
+        dict_iter_t iter;
+
+        if(NULL != (src_obj = dict_look_up(key_dict, args[0]))) {
+                CHECK_TYPE(src_obj, SET);
+                src_set = src_obj->val;
+        }
+        if(NULL != (dst_obj = dict_look_up(key_dict, args[1]))) {
+                CHECK_TYPE(dst_obj, SET);
+                dst_set = dst_obj->val;
+        }
+
+        if(NULL == src_obj) {
+                FREE_ARGS(0, 3);
+                false_reply();
+        }
+
+        iter = dict_rm_nf(src_set, args[2]);
+        if(NULL == iter.curr) {
+                FREE_ARGS(0, 3);
+                false_reply();
+        }
+
+        if(NULL == dict_look_up(dst_set, args[2]))
+                set_add(dst_set, iter.curr->key);
+
+        else
+                free(iter.curr->key);
+
+        FREE_ARGS(0, 3);
+        free(iter.curr);
+        true_reply();
 }
 
 CMD_PROTO(scard)
@@ -1712,14 +1754,7 @@ CMD_PROTO(spop)
 {
 }
 
-/* a callback to duplicate an existing set */
-int dict_cpy_callback(const dict_iter_t *iter, void *data)
-{
-        dict_add((dict_t *)data, iter->curr->key, SET_VAL_PTR);
-        return 0;
-}
-
-/* a callback to del a members from the anther set */
+/* a callback to del a members from the another set */
 int dict_diff_callback(const dict_iter_t *iter, void *data)
 {
         /* we have to used the no-free version
@@ -1801,8 +1836,69 @@ CMD_PROTO(srem)
         return _hdelsrem_command(key_dict, args, num, SET);
 }
 
+/* a callback to perform union on two sets
+ * data : dict_t *data[], where data[0]:set0/data[1]:set1
+ */
+int dict_inter_callback(const dict_iter_t *iter, void *data)
+{
+        /* we have to used the no-free version
+         * coz this is only a shallow copy
+         */
+        if(!dict_look_up((dict_t *)((dict_t**)data)[1], iter->curr->key)) {
+                printf("removing %s\n", iter->curr->key->str);
+                dict_rm_nf((dict_t *)((dict_t**)data)[0], iter->curr->key);
+        }
+        return 0;
+}
+
 CMD_PROTO(sinter)
 {
+        CHECK_ARGS_GE(2);
+
+        obj_t *set_obji, *set_obj0;
+        dict_t *data[2];
+        dict_t *set0, *seti;
+        dict_t *new_set;
+        int flag;
+
+        /* check type, find the smallest set... */
+        flag = 0;
+        set0 = 0;
+        for(size_t i = 0; i < num; ++i) {
+                if(NULL != (set_obji = dict_look_up(key_dict, args[i]))) {
+                        CHECK_TYPE(set_obji, SET);
+                        seti = set_obji->val;
+                        if(NULL == set0 || seti->entry_num < set0->entry_num)
+                                set0 = seti;
+                } else {
+                        flag = 1;
+                }
+        }
+
+        reset_reply_arr();
+        /* one of the sets is empty */
+        if(flag)
+                arr_reply();
+
+        /* get a shallow copy of set0, the set with the smallest size */
+        new_set = dict_create(NEW_DICT_POW);
+        dict_iter(set0, dict_cpy_callback, new_set);
+
+        /* perform union iteratively */
+        data[0] = new_set;
+        for(size_t i = 0; i < num; ++i) {
+                set_obji = dict_look_up(key_dict, args[i]);
+                seti = set_obji->val;
+
+                data[1] = seti;
+                dict_iter(new_set, dict_inter_callback, data);
+        }
+
+        dict_iter(new_set, addkey_to_arr, NULL);
+
+        dict_destroy_shallow(new_set);
+        FREE_ARGS(0, num);
+        arr_reply();
 }
 
 CMD_PROTO(sscan)
