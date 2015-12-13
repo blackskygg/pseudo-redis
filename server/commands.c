@@ -1,4 +1,3 @@
-#include <endian.h>
 #include "commands.h"
 
 #define FREE_ARG(n) free(args[(n)])
@@ -72,9 +71,16 @@ _CMD_PROTO(exists)
 }
 
 /* helper function used by dict_iter to add keys to an array */
-static int addkey_to_arr(const dict_iter_t *dict_iter, void *dummy)
+static int addkey_to_arr(const dict_iter_t *dict_iter, void *data)
 {
-        return addto_reply_arr(dict_iter->curr->key, STR_NORMAL);
+        bss_t *pattern = data;
+
+        if(NULL == pattern)
+                return addto_reply_arr(dict_iter->curr->key, STR_NORMAL);
+        else if(!fnmatch(pattern->str, dict_iter->curr->key->str, 0))
+                return addto_reply_arr(dict_iter->curr->key, STR_NORMAL);
+        else
+                return 0;
 }
 
 static int addval_to_arr(const dict_iter_t *dict_iter, void *dummy)
@@ -288,10 +294,13 @@ CMD_PROTO(keys)
         CHECK_ARGS(1);
 
         reset_reply_arr();
-        if(0 != dict_iter(key_dict, addkey_to_arr, NULL))
+        if(0 != dict_iter(key_dict, addkey_to_arr, args[0])) {
+                FREE_ARG(0);
                 fail_reply(TOO_LONG);
-        else
+        } else {
+                FREE_ARG(0);
                 arr_reply();
+        }
 }
 
 CMD_PROTO(rename)

@@ -1,6 +1,7 @@
 #ifndef COMMAND_H_
 #define COMMAND_H_
 
+#include <fnmatch.h>
 #include "server.h"
 
 #define CMD_PROTO(name) int name##_command(bss_t *args[], size_t num)
