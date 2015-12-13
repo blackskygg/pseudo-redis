@@ -49,6 +49,7 @@ typedef int (*dict_callback_t)(const dict_iter_t *dict_iter, void *data);
 /* dict APIs */
 dict_t *dict_create(int power);
 void dict_destroy(dict_t *dict);
+void dict_destroy_shallow(dict_t *dict);
 dict_entry_t *dict_entry_create(const bss_t *key, obj_t *obj);
 uint32_t dict_get_hash(const bss_t *bss);
 int dict_add(dict_t *dict, const bss_t *key, obj_t *obj);

@@ -220,6 +220,14 @@ void dict_destroy(dict_t *dict)
         free(dict);
 }
 
+/* shallow destroy, entries will not be freed */
+void dict_destroy_shallow(dict_t *dict)
+{
+        free(dict->hash_tbl);
+        free(dict);
+}
+
+
 void dict_destroy_obj(obj_t *dict_obj)
 {
         dict_destroy(dict_obj->val);

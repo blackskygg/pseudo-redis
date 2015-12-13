@@ -45,15 +45,16 @@
 
 _CMD_PROTO(del)
 {
-        CHECK_ARGS(1);
+        CHECK_ARGS_GE(1);
 
-        if(0 != dict_rm(dict, args[0])) {
-                FREE_ARG(0);
-                false_reply();
-        } else {
-                FREE_ARG(0);
-                true_reply();
+        size_t count = 0;
+        for(size_t i = 0; i < num; ++i) {
+                if(!dict_rm(dict, args[i]))
+                        count++;
         }
+
+        FREE_ARGS(0, num);
+        int_reply(count);
 }
 
 _CMD_PROTO(exists)
@@ -262,19 +263,23 @@ CMD_PROTO(exists)
         return _exists_command(key_dict, args, num);
 }
 
-
-CMD_PROTO(randomkey)
+_CMD_PROTO(randomkey)
 {
         CHECK_ARGS(0);
 
         dict_entry_t *entry;
 
-        if(0 == key_dict->entry_num) {
+        if(0 == dict->entry_num) {
                 nil_reply();
         } else {
-                entry = dict_random_elem(key_dict);
+                entry = dict_random_elem(dict);
                 string_reply(entry->key->str, entry->key->len);
         }
+}
+
+CMD_PROTO(randomkey)
+{
+        _randomkey_command(key_dict, args, num);
 }
 
 
@@ -680,22 +685,36 @@ CMD_PROTO(strlen)
         }
 }
 
-CMD_PROTO(hdel)
+
+_CMD_BI_PROTO(hdel, srem)
 {
-        CHECK_ARGS(2);
+        CHECK_ARGS_GE(2);
 
         obj_t *val_obj;
+        dict_t *ds;
         bss_t *bss;
+        int ret_val;
 
         if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
-                FREE_ARG(0);
-                FREE_ARG(1);
+                FREE_ARGS(0, num);
                 false_reply();
         } else {
-                CHECK_TYPE(val_obj, HASH);
+                CHECK_TYPE(val_obj, type);
+
+                ds = val_obj->val;
+
+                ret_val = _del_command(ds, args + 1, num - 1);
+                if(0 == ds->entry_num)
+                        dict_rm(key_dict, args[0]);
+
                 FREE_ARG(0);
-                return _del_command((dict_t *)val_obj->val, args + 1, num - 1);
+                return ret_val;
         }
+}
+
+CMD_PROTO(hdel)
+{
+        return _hdelsrem_command(key_dict, args, num, HASH);
 }
 
 CMD_PROTO(hlen)
@@ -933,23 +952,28 @@ CMD_PROTO(hsetnx)
 
 }
 
-CMD_PROTO(hkeys)
+_CMD_BI_PROTO(hkeys, smembers)
 {
         CHECK_ARGS(1);
 
         obj_t *val_obj;
 
         reset_reply_arr();
-        if(NULL == (val_obj = dict_look_up(key_dict, args[0])))
+        if(NULL == (val_obj = dict_look_up(dict, args[0])))
                 arr_reply();
 
-        CHECK_TYPE(val_obj, HASH);
+        CHECK_TYPE(val_obj, type);
 
         FREE_ARG(0);
         if(0 != dict_iter((dict_t *)val_obj->val, addkey_to_arr, NULL))
                 fail_reply(TOO_LONG);
         else
                 arr_reply();
+}
+
+CMD_PROTO(hkeys)
+{
+        return _hkeyssmembers_command(key_dict, args, num, HASH);
 }
 
 CMD_PROTO(hvals)
@@ -1679,50 +1703,93 @@ CMD_PROTO(spop)
 {
 }
 
+/* a callback to duplicate an existing set */
+int dict_cpy_callback(const dict_iter_t *iter, void *data)
+{
+        dict_add((dict_t *)data, iter->curr->key, SET_VAL_PTR);
+        return 0;
+}
+
+/* a callback to del a members from the anther set */
+int dict_diff_callback(const dict_iter_t *iter, void *data)
+{
+        /* we have to used the no-free version
+         * coz this is only a shallow copy
+         */
+        dict_rm_nf((dict_t *)data, iter->curr->key);
+        return 0;
+}
+
 CMD_PROTO(sdiff)
+{
+        CHECK_ARGS_GE(2);
+
+        obj_t *set_obj0, *set_obji;
+        dict_t *new_set;
+        dict_t *set0, *seti;
+        int ret_val;
+
+        /* check their types */
+        for(size_t i = 0; i < num; ++i) {
+                if(NULL != (set_obji = dict_look_up(key_dict, args[i])))
+                        CHECK_TYPE(set_obji, SET);
+        }
+
+        /* is the first set empty */
+        reset_reply_arr();
+        if(NULL == (set_obj0 = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, num);
+                arr_reply();
+        }
+
+        /* get a shallow copy of the original set */
+        set0 = set_obj0->val;
+        new_set = dict_create(set0->power);
+        dict_iter(set0, dict_cpy_callback, (void *)new_set);
+
+        for(size_t i = 1; i < num; ++i) {
+                if(NULL == (set_obji = dict_look_up(key_dict, args[i])))
+                        continue;
+
+                seti = set_obji->val;
+                dict_iter(seti, dict_diff_callback, new_set);
+        }
+
+        dict_iter(new_set, addkey_to_arr, NULL);
+        dict_destroy_shallow(new_set);
+        FREE_ARGS(0, num);
+
+        arr_reply();
+}
+
+CMD_PROTO(srandmember_cnt)
 {
 }
 
 CMD_PROTO(srandmember)
 {
-        if(1 != num &&  2 != num) {
-                FREE_ARGS(0, num);
-                fail_reply(INV_ARG);
-        }
+        /* none of my business? */
+        if(2 == num)
+                return srandmember_cnt_command(args, num);
+        else
+                CHECK_ARGS(1);
 
         obj_t *set_obj;
-        bss_int_t count;
-        dict_entry_t *entry;
+        dict_t *set;
 
-        if(bss2int(args[1], &count)) {
-                FREE_ARGS(0, num);
-                fail_reply(INV_INT);
-        }
-
-        if(2 == num) {
-                if(bss2int(args[1], &count)) {
-                        FREE_ARGS(0, num);
-                        fail_reply(INV_INT);
-                }
-        }
-
-        reset_reply_arr();
         if(NULL == (set_obj = dict_look_up(key_dict, args[0]))) {
                 FREE_ARGS(0, num);
-                if(2 == num)
-                        arr_reply();
-                else
-                        nil_reply();
+                nil_reply();
+        } else {
+                CHECK_TYPE(set_obj, SET);
+                return _randomkey_command(set, args + 1, num - 1);
         }
 
-        CHECK_TYPE(set_obj, SET);
-        if(2 == num) {
-
-        }
 }
 
 CMD_PROTO(srem)
 {
+        return _hdelsrem_command(key_dict, args, num, SET);
 }
 
 CMD_PROTO(sinter)
@@ -1764,29 +1831,7 @@ CMD_PROTO(sismember)
         }
 }
 
-int smembers_callback(const dict_iter_t *dict_iter, void *data)
-{
-        addto_reply_arr(dict_iter->curr->key, STR_NORMAL);
-}
-
 CMD_PROTO(smembers)
 {
-        CHECK_ARGS(1);
-
-        obj_t *set_obj;
-        dict_t *set;
-
-        reset_reply_arr();
-        if(NULL == (set_obj = dict_look_up(key_dict, args[0]))) {
-                FREE_ARG(0);
-        } else {
-                CHECK_TYPE(set_obj, SET);
-                set = set_obj->val;
-                FREE_ARG(0);
-
-                dict_iter(set, smembers_callback, NULL);
-        }
-
-        arr_reply();
+        return _hkeyssmembers_command(key_dict, args, num, SET);
 }
-
