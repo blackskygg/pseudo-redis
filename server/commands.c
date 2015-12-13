@@ -1809,8 +1809,42 @@ CMD_PROTO(sscan)
 {
 }
 
+int dict_union_callback(const dict_iter_t *iter, void *new_set)
+{
+        dict_add_shallow(new_set, iter->curr->key, SET_VAL_PTR);
+        return 0;
+}
+
 CMD_PROTO(sunion)
 {
+        CHECK_ARGS_GE(2);
+
+        obj_t *set_obji;
+        dict_t *new_set;
+        dict_t *seti;
+        int ret_val;
+
+        /* check their types */
+        for(size_t i = 0; i < num; ++i) {
+                if(NULL != (set_obji = dict_look_up(key_dict, args[i])))
+                        CHECK_TYPE(set_obji, SET);
+        }
+
+        reset_reply_arr();
+        new_set = dict_create(NEW_DICT_POW);
+        for(size_t i = 0; i < num; ++i) {
+                if(NULL == (set_obji = dict_look_up(key_dict, args[i])))
+                        continue;
+
+                seti = set_obji->val;
+                dict_iter(seti, dict_union_callback, new_set);
+        }
+
+        dict_iter(new_set, addkey_to_arr, NULL);
+        dict_destroy_shallow(new_set);
+        FREE_ARGS(0, num);
+
+        arr_reply();
 }
 
 CMD_PROTO(sismember)

@@ -142,7 +142,8 @@ static dict_iter_t _dict_look_up_hash(const dict_t *dict, uint32_t hash,
 
         iter.curr = dict->hash_tbl[hash];
         while(NULL != iter.curr) {
-                if(0 == bss_cmp(key, iter.curr->key))
+                if(key == iter.curr->key
+                   || 0 == bss_cmp(key, iter.curr->key))
                         break;
                 iter.prev = iter.curr;
                 iter.curr = iter.curr->next;
@@ -250,6 +251,32 @@ dict_entry_t *dict_entry_create(const bss_t *key, obj_t *obj)
 }
 
 /* add an entry to dict
+ * if the key already exists, no operation will be done
+ */
+int dict_add_shallow(dict_t *dict, const bss_t *key, obj_t *obj)
+{
+        uint32_t hash;
+        dict_iter_t iter = {NULL, NULL};
+
+        hash = dict_get_hash(key) & dict->bit_mask;
+        iter = _dict_look_up_hash(dict, hash, key);
+        if(NULL != iter.curr)
+                return 0;
+
+        if(NULL == (iter.curr = dict_entry_create(key, obj)))
+                return E_MEM_OUT;
+
+        if(NULL == iter.prev)
+                dict->hash_tbl[hash] = iter.curr;
+        else
+                iter.prev->next = iter.curr;
+
+        /* now the entry is safely added to the dict */
+        dict->entry_num++;
+        return 0;
+}
+
+/* add an entry to dict
  * the dict might be expanded if the number of entries is too large
  * but expanding will probably fail
  */
@@ -267,18 +294,19 @@ int dict_add(dict_t *dict, const bss_t *key, obj_t *obj)
 #endif
 
         hash = dict_get_hash(key) & dict->bit_mask;
-
         iter = _dict_look_up_hash(dict, hash, key);
-
-        /* if key exists, replace it with the new one*/
         if(NULL != iter.curr) {
+                /* if key exists, replace it with the new one
+                 * this will make sure that an added key need not to be freed
+                 */
                 bss_destroy(iter.curr->key);
                 iter.curr->key = (bss_t *)key;
-                iter.curr->val->op->destroy(iter.curr->val);
-                iter.curr->val = obj;
+                if(SET_VAL_PTR != iter.curr->val) {
+                        iter.curr->val->op->destroy(iter.curr->val);
+                        iter.curr->val = obj;
+                }
                 return 0;
         } else {
-
                 if(NULL == (iter.curr = dict_entry_create(key, obj)))
                         return E_MEM_OUT;
 
