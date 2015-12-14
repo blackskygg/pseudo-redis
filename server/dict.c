@@ -3,7 +3,6 @@
 #define HASH_SEED 5381
 
 /* static functions */
-static void destroy_entry(const dict_iter_t *iter);
 static int destroy_entry_callback(const dict_iter_t *iter, void *dummy);
 static dict_iter_t _dict_look_up_hash(const dict_t *dict, uint32_t hash,
                                  const bss_t *key);
@@ -111,7 +110,7 @@ int dict_iter(const dict_t *dict, dict_callback_t func, void *data)
 }
 
 /* destroy an entry pointed to by iter->curr */
-static void destroy_entry(const dict_iter_t *iter)
+void dict_destroy_entry(const dict_iter_t *iter)
 {
         /* notice that we don't need to set the slot to NULL,
          * nor do we need to deal with the links,
@@ -128,7 +127,7 @@ static void destroy_entry(const dict_iter_t *iter)
  */
 static int destroy_entry_callback(const dict_iter_t *iter, void *dummy)
 {
-        destroy_entry(iter);
+        dict_destroy_entry(iter);
         return 0;
 }
 
@@ -207,7 +206,7 @@ int dict_rm(dict_t *dict, const bss_t *key)
         if(NULL == target_iter.curr)
                 return E_NOT_FOUND;
 
-        destroy_entry(&target_iter);
+        dict_destroy_entry(&target_iter);
 
         return 0;
 

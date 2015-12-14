@@ -1827,8 +1827,40 @@ CMD_PROTO(scard)
         }
 }
 
+CMD_PROTO(spop_cnt)
+{
+}
+
 CMD_PROTO(spop)
 {
+        /* none of my business? */
+        if(2 == num)
+                return spop_cnt_command(args, num);
+        else
+                CHECK_ARGS(1);
+
+        obj_t *set_obj;
+        dict_t *set;
+        dict_entry_t *entry;
+        dict_iter_t iter;
+        int ret_val;
+
+        if(NULL == (set_obj = dict_look_up(key_dict, args[0]))) {
+                FREE_ARGS(0, num);
+                nil_reply();
+        } else {
+                CHECK_TYPE(set_obj, SET);
+                set = set_obj->val;
+
+                entry = dict_random_elem(set);
+                iter = dict_rm_nf(set, entry->key);
+
+                FREE_ARGS(0, num);
+                ret_val = create_str_reply(entry->key->str,
+                                           entry->key->len, RPLY_STRING);
+                dict_destroy_entry(&iter);
+                return 0;
+        }
 }
 
 /* a callback to del a members from the another set */
@@ -2038,7 +2070,7 @@ CMD_PROTO(sscan)
         iter_num = count * 16;
 
         /* put things into the rply arr */
-        do{nn
+        do{
                 cursor = dict_scan(set, (uint32_t)cursor,
                                    addkey_to_arr, pattern);
         }while(cursor && (--iter_num >= 0)

@@ -24,4 +24,4 @@ hdel hlen hexists hmget hget hmset hgetall hincrby hset hsetnx hkeys hvals linse
 rpop llen lpop  rpush lpush rpushx lpushx lrange rpoplpush lset lindex lrem ltrim brpop brpoplpush blpop
 
 ###set 
-scard sadd sismember smembers spop srandmember(partial) sdiff srem sunion smove sinter 
+scard sadd sismember smembers spop srandmember(partial) sdiff srem sunion smove sinter sscan
