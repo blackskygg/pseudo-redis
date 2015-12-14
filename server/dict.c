@@ -410,6 +410,7 @@ int dict_expand(dict_t *dict, uint8_t power)
 }
 #endif /*DICT_RESIZE*/
 
+/* return a random element for dict */
 dict_entry_t *dict_random_elem(dict_t *dict)
 {
         uint32_t hash;
@@ -434,6 +435,29 @@ dict_entry_t *dict_random_elem(dict_t *dict)
         while(listele--)
                 he = he->next;
         return he;
+}
+
+/* use to iterate over a dict. given a cursor, it will return a new cursor for
+   next iteration
+ * its absolutely stateless, so the effect totally depends on cursor
+ */
+uint32_t dict_scan(dict_t *dict, uint32_t cursor, dict_callback_t func, void *data)
+{
+        dict_iter_t iter;
+        dict_entry_t *next_ent;
+
+        iter.prev = NULL;
+        iter.curr = dict->hash_tbl[cursor & dict->bit_mask];
+        while(iter.curr != NULL) {
+                next_ent = iter.curr->next;
+
+                func(&iter, data);
+
+                iter.prev = iter.prev ? iter.prev->next : NULL;
+                iter.curr = next_ent;
+        }
+
+        return (++cursor) & dict->bit_mask;
 }
 
 /* this function is borrowed from redis's source code */

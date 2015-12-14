@@ -27,7 +27,8 @@
 #define RPLY_FLOAT 0x05
 #define RPLY_STRING 0x06
 #define RPLY_ARR 0x07
-#define RPLY_TYPE 0x08
+#define RPLY_DB_ARR 0x08 /* the fancy double array */
+#define RPLY_TYPE 0x09
 /* types for bsses in the arr reply */
 #define STR_NORMAL 0x00
 #define STR_NIL 0x01
@@ -45,6 +46,7 @@
 /* reply structure */
 struct reply {
         uint8_t reply_type;
+        uint32_t arr_num;
         uint32_t len;
         uint8_t data[];
 }__attribute__((__packed__));
@@ -118,12 +120,27 @@ void print_str(uint8_t *data, size_t len, bool quote)
         putchar('\n');
 }
 
+int count_space(uint32_t len)
+{
+        int result = 0;
+
+        while(len){
+                len = len / 10;
+                result++;
+        }
+
+        return result;
+}
+
 void display_reply(reply_t *reply)
 {
         int index = 1;
         uint32_t len = 0;
         uint8_t *pos = reply->data;
         uint8_t type;
+        int disp_width = 0;
+        int indent = 0;
+        char fmt[32]; /* format string used to display array */
 
         switch(reply->reply_type) {
         case RPLY_OK:
@@ -142,15 +159,29 @@ void display_reply(reply_t *reply)
         case RPLY_NIL:
                 printf("(nil)\n");
                 break;
+        case RPLY_DB_ARR:
+                /* this actually works like a so-called decorator */
+                *pos++;
+                len = *(uint32_t *)pos;
+                pos += sizeof(len);
+                printf("%d) ", 1);
+                print_str(pos, len, true);
+                pos += len;
+                printf("%d) ", 2);
+                indent = 1;
         case RPLY_ARR:
+                disp_width += count_space(reply->arr_num);
+                sprintf(fmt, "%%%dd) ", disp_width);
                 for(;;) {
                         type = *pos++;
 
                         if(STR_END & type)
                                 break;
 
+                        if(indent && 1 != index)
+                                printf("   ");
                         if(!(STR_NI & type))
-                                printf("%d) ", index);
+                                printf(fmt, index);
 
                         if(STR_NIL & type) {
                                 printf("(nil)\n", index);
@@ -223,14 +254,18 @@ int main()
 
                 send_request(name, buf+end, len - end - 1);
 
-                read(fd, reply, sizeof(reply_t) + BUF_SIZE);
+                if(0 == read(fd, reply, sizeof(reply_t) + BUF_SIZE)) {
+                        printf("Aha, the server is down!\n");
+                        goto EXIT;
+                }
 
                 display_reply(reply);
 
 
         }while(strcasecmp(buf, "quita"));
 
-        close(fd);
 
+EXIT:
+        close(fd);
         return 0;
 }

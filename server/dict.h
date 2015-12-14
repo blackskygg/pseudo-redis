@@ -11,6 +11,7 @@
 #define MAX_POWER 32
 #define MAX_UINT32  UINT32_MAX
 #define SET_VAL_PTR (void *)0x1
+#define SMALL_SET   128
 
 struct dict_entry {
         bss_t *key;
@@ -61,6 +62,7 @@ dict_iter_t _dict_look_up(const dict_t *dict, const bss_t *key);
 obj_t *dict_look_up(const dict_t *dict, const bss_t *key);
 int dict_iter(const dict_t *dict, dict_callback_t func, void *data);
 dict_entry_t *dict_random_elem(dict_t *dict);
+uint32_t dict_scan(dict_t *dict, uint32_t cursor, dict_callback_t func, void *data);
 
 #ifdef DICT_RESIZE
 int dict_expand(dict_t *dict, uint8_t power);

@@ -26,7 +26,7 @@
 #define MAX_RPLY_SIZE 1024*1024
 #define MAX_RPLY_ARR 1024
 #define MAX_ARGS  1024
-#define NEW_DICT_POW 7
+#define NEW_DICT_POW 12
 #define TIME_LEN 32
 
 /* the reply types
@@ -41,7 +41,8 @@
 #define RPLY_FLOAT 0x05
 #define RPLY_STRING 0x06
 #define RPLY_ARR 0x07
-#define RPLY_TYPE 0x08
+#define RPLY_DB_ARR 0x08 /* the fancy double array */
+#define RPLY_TYPE 0x09
 /* types for bsses in the arr reply */
 #define STR_NORMAL 0x00
 #define STR_NIL 0x01
@@ -62,6 +63,7 @@ typedef struct client client_t;
 /* reply structure */
 struct reply {
         uint8_t reply_type;
+        uint32_t arr_num;
         uint32_t len;
         uint8_t data[];
 }__attribute__((__packed__));
@@ -108,7 +110,7 @@ typedef struct action action_t;
 int create_empty_reply(int type);
 int create_str_reply(char *s, size_t len, int type);
 int create_int_reply(int64_t n);
-int create_arr_reply();
+int create_arr_reply(int type);
 int create_type_reply(uint8_t n);
 int addto_reply_arr(bss_t *bss, uint8_t type);
 void reset_reply_arr();
@@ -121,6 +123,7 @@ void reset_reply_arr();
 #define INV_TM "ERR timeout is not an integer or out of range"
 #define NEG_TM "ERR timeout is negative"
 #define INV_OFFSET "ERR bit offset is not an integer or out of range"
+#define INV_CURSOR "ERR invalid cursor"
 #define NO_KEY "ERR no such key"
 #define INV_SYNX "ERR syntax error"
 #define TOO_LONG "ERR request or reply too long"
@@ -138,7 +141,8 @@ void reset_reply_arr();
 #define true_reply() return create_int_reply(1)
 #define false_reply() return create_int_reply(0)
 #define int_reply(n) return create_int_reply(n)
-#define arr_reply() return create_arr_reply()
+#define arr_reply() return create_arr_reply(RPLY_ARR)
+#define dbarr_reply() return create_arr_reply(RPLY_DB_ARR)
 #define type_reply(n) return create_type_reply(n)
 
 /* global server data

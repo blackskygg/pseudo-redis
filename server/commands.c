@@ -285,7 +285,7 @@ _CMD_PROTO(randomkey)
 
 CMD_PROTO(randomkey)
 {
-        _randomkey_command(key_dict, args, num);
+       return _randomkey_command(key_dict, args, num);
 }
 
 
@@ -1584,12 +1584,12 @@ _CMD_BI_PROTO(lpop, rpop)
 
 CMD_PROTO(lpop)
 {
-        _lpoprpop_command(NULL, args, num, LEFT_OP);
+        return _lpoprpop_command(NULL, args, num, LEFT_OP);
 }
 
 CMD_PROTO(rpop)
 {
-        _lpoprpop_command(NULL, args, num, RIGHT_OP);
+        return _lpoprpop_command(NULL, args, num, RIGHT_OP);
 }
 
 CMD_PROTO(llen)
@@ -1687,12 +1687,12 @@ _CMD_BI_PROTO(lpush, rpush)
 }
 CMD_PROTO(rpush)
 {
-        _lpushrpush_command(NULL, args, num, RIGHT_OP);
+        return _lpushrpush_command(NULL, args, num, RIGHT_OP);
 }
 
 CMD_PROTO(lpush)
 {
-        _lpushrpush_command(NULL, args, num, LEFT_OP);
+        return _lpushrpush_command(NULL, args, num, LEFT_OP);
 }
 
 _CMD_BI_PROTO(lpushx, rpushx)
@@ -1725,12 +1725,12 @@ _CMD_BI_PROTO(lpushx, rpushx)
 }
 CMD_PROTO(rpushx)
 {
-        _lpushrpush_command(NULL, args, num, RIGHT_OP);
+        return _lpushrpush_command(NULL, args, num, RIGHT_OP);
 }
 
 CMD_PROTO(lpushx)
 {
-        _lpushrpush_command(NULL, args, num, LEFT_OP);
+        return _lpushrpush_command(NULL, args, num, LEFT_OP);
 }
 
 /* a callback to duplicate an existing set */
@@ -1980,6 +1980,74 @@ CMD_PROTO(sinter)
 
 CMD_PROTO(sscan)
 {
+
+        char *pattern = NULL;
+        bss_int_t count = 10;
+        bss_int_t cursor;
+        size_t iter_num;
+        bss_t *num_bss;
+        obj_t *set_obj;
+        dict_t *set;
+
+        CHECK_ARGS_GE(2);
+
+        /* get and check the cursor */
+        if(bss2int(args[1], &cursor)
+           || cursor > MAX_UINT32
+           || cursor < 0) {
+                FREE_ARGS(0, num);
+                fail_reply(INV_CURSOR);
+        }
+
+        /* parse options */
+        for(int i = 2; i < num;) {
+                if(!strcasecmp(args[i]->str, "COUNT") && (i + 1) < num) {
+                        /* count can't be zero and non-digit */
+                        if(bss2int(args[i+1], &count) || 0 == count) {
+                                FREE_ARGS(0, num);
+                                fail_reply(INV_SYNX);
+                        }
+                        i+=2;
+                } else if(!strcasecmp(args[i]->str, "COUNT") && (i + 1) < num) {
+                        /* if you say that it's a pattern, then it is */
+                        pattern = args[i+1]->str;
+                        i+=2;
+                } else {
+                        FREE_ARGS(0, num);
+                        fail_reply(INV_SYNX);
+                }
+        }
+
+        /* we use a small trick here
+         * since we don't know the exacte number of elements right now
+         * we put a bss at the beginning of the reply array
+         * and we'll be back and will modify it later
+         */
+        reset_reply_arr();
+        num_bss = bss_create("0", 1);
+        addto_reply_arr(num_bss, NEED_FREE);
+
+        if(NULL != (set_obj = dict_look_up(key_dict, args[0]))) {
+                CHECK_TYPE(set_obj, SET);
+                set = set_obj->val;
+        } else {
+                FREE_ARGS(0, num);
+                dbarr_reply();
+        }
+
+        iter_num = count * 16;
+
+        /* put things into the rply arr */
+        do{nn
+                cursor = dict_scan(set, (uint32_t)cursor,
+                                   addkey_to_arr, pattern);
+        }while(cursor && (--iter_num >= 0)
+               && (_rply_arr_len - 1 < count));
+
+        /* now we can fill in the first elem and reply */
+        bss_incr(num_bss, cursor);
+        FREE_ARGS(0, num);
+        dbarr_reply();
 }
 
 int dict_union_callback(const dict_iter_t *iter, void *new_set)

@@ -185,7 +185,7 @@ int addto_reply_arr(bss_t *bss_ptr, uint8_t type)
         return 0;
 }
 
-int create_arr_reply()
+int create_arr_reply(int arr_type)
 {
         uint8_t *pos = _curr_reply->data;
         uint8_t type;
@@ -225,8 +225,12 @@ int create_arr_reply()
         /* add the ending STR_END */
         *pos++ = STR_END;
         total_len++;
-        _curr_reply->reply_type = RPLY_ARR;
+        _curr_reply->reply_type = arr_type;
         _curr_reply->len = total_len;
+        if(RPLY_ARR == type)
+                _curr_reply->arr_num = _rply_arr_len;
+        else
+                _curr_reply->arr_num = _rply_arr_len - 1;
 
         return 0;
 }
@@ -428,9 +432,7 @@ void send_reply(int fd)
 {
         int ret;
         printf("sending to %d\n", fd);
-        do{
-                ret = write(fd, _curr_reply, sizeof(reply_t) + _curr_reply->len);
-        }while(EAGAIN == ret || EWOULDBLOCK == ret);
+        ret = write(fd, _curr_reply, sizeof(reply_t) + _curr_reply->len);
 }
 
 /* process the incoming data */
@@ -461,6 +463,7 @@ int process_in_data(struct epoll_event *ev)
 void accept_connection()
 {
         int tfd;
+        int ret;
         struct sockaddr_in addr;
         struct epoll_event ev;
         socklen_t len;
@@ -479,7 +482,9 @@ void accept_connection()
                         /* tell the client who he is
                          * we use the fd number as a the client id
                          */
-                        write(tfd, &tfd, sizeof tfd);
+                        do {
+                               ret = write(tfd, &tfd, sizeof tfd);
+                        }while(EAGAIN == ret || EWOULDBLOCK == ret);
 
                         printf("connection established with %d\n", tfd);
                 }
@@ -540,7 +545,7 @@ void do_hanging_jobs()
                         free(curr->request);
                         free(curr);
 
-                        create_arr_reply();
+                        create_arr_reply(RPLY_ARR);
                         send_reply(id);
                 }
 
