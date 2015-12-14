@@ -54,7 +54,8 @@ EXTERN command_t commad_tbl[] = {CMD_ENT(del), CMD_ENT(exists),
                                  CMD_ENT(srandmember), CMD_ENT(srem),
                                  CMD_ENT(sinter), CMD_ENT(sscan),
                                  CMD_ENT(sunion), CMD_ENT(sismember),
-                                 CMD_ENT(smembers), CMD_ENT(setnx) };
+                                 CMD_ENT(smembers), CMD_ENT(setnx),
+                                 CMD_ENT(incrbyfloat)};
 
 
 /* ======server local variables========= */

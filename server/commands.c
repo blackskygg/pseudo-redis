@@ -925,8 +925,85 @@ CMD_PROTO(hmset)
         return ret;
 }
 
+_CMD_PROTO(incrbyfloat)
+{
+        CHECK_ARGS(2);
+
+        obj_t *str_obj;
+        bss_t *bss;
+        long double number;
+        long double result;
+        char str_ldb[BSS_LDB_LEN];
+        size_t ldb_len;
+
+
+        if(bss2ld(args[1], &number))
+                goto ERR_INV_FLT;
+
+        if(NULL == (str_obj = dict_look_up(dict, args[0]))) {
+                /* contruct an bss obj and add it to dict */
+                ldb_len = sprintf(str_ldb, BSS_FLT_FMT, number);
+                bss = bss_create(str_ldb, ldb_len);
+                bss_cut_zero(bss);
+                str_obj = bss_create_obj(bss);
+
+                dict_add(dict, args[0], str_obj);
+
+                FREE_ARG(1);
+                string_reply(bss->str, bss->len);
+        } else {
+                CHECK_TYPE(str_obj, STRING);
+
+                bss = str_obj->val;
+                if(bss2ld(bss, &result))
+                        goto ERR_INV_FLT;
+
+                /* add and set */
+                result += number;
+                if(isnanl(result) || isinfl(result))
+                        goto ERR_INV_FLT;
+                ldb_len = sprintf(str_ldb, BSS_FLT_FMT, result);
+                bss = str_obj->val = bss_set(bss, str_ldb, ldb_len);
+                bss_cut_zero(bss);
+
+                FREE_ARG(0);
+                FREE_ARG(1);
+                string_reply(bss->str, bss->len);
+        }
+
+ERR_INV_FLT:
+        FREE_ARG(0);
+        FREE_ARG(1);
+        fail_reply(INV_FLT);
+}
+
+CMD_PROTO(incrbyfloat)
+{
+        return _incrbyfloat_command(key_dict, args, num);
+}
+
 CMD_PROTO(hincrbyfloat)
 {
+        CHECK_ARGS(3);
+
+        obj_t *val_obj;
+        dict_t *dict;
+
+        if(NULL == (val_obj = dict_look_up(key_dict, args[0]))) {
+                /* if it dose not exist, create one */
+                dict = dict_create(NEW_DICT_POW);
+                val_obj = dict_create_obj(dict);
+                dict_add(key_dict, args[0], val_obj);
+
+                return _incrbyfloat_command(dict, args + 1, num - 1);
+        } else {
+                CHECK_TYPE(val_obj, HASH);
+                dict = val_obj->val;
+
+                FREE_ARG(0);
+                return _incrbyfloat_command(dict, args + 1, num - 1);
+        }
+
 }
 
 CMD_PROTO(hsetnx)

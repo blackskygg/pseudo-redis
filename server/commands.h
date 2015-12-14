@@ -2,6 +2,8 @@
 #define COMMAND_H_
 
 #include <fnmatch.h>
+#include <math.h>
+#include <float.h>
 #include "server.h"
 
 #define CMD_PROTO(name) int name##_command(bss_t *args[], size_t num)
@@ -34,6 +36,7 @@ CMD_PROTO(incr);
 CMD_PROTO(decr);
 CMD_PROTO(incrby);
 CMD_PROTO(decrby);
+CMD_PROTO(incrbyfloat);
 CMD_PROTO(msetnx);
 CMD_PROTO(get);
 CMD_PROTO(set);

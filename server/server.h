@@ -116,10 +116,8 @@ void reset_reply_arr();
 #define NUM_ARGS "ERR wrong number of arguments"
 #define INV_CMD "ERR unknown command"
 #define INV_ARG "ERR Invalid Arguments"
-#define MEM_OUT "Server Memory Out"
-#define WRONG_TYPE "WRONG TYPE "                                \
-        "Operation against a key holding a wrong kind of value"
 #define INV_INT "ERR value is not an integer or out of range"
+#define INV_FLT "ERR Value is not a valid float"
 #define INV_TM "ERR timeout is not an integer or out of range"
 #define NEG_TM "ERR timeout is negative"
 #define INV_OFFSET "ERR bit offset is not an integer or out of range"
@@ -127,6 +125,10 @@ void reset_reply_arr();
 #define INV_SYNX "ERR syntax error"
 #define TOO_LONG "ERR request or reply too long"
 #define OUT_RANGE "ERR index out of range"
+#define WRONG_TYPE "WRONG TYPE "                                \
+        "Operation against a key holding a wrong kind of value"
+#define MEM_OUT "Server Memory Out"
+
 
 #define fail_reply(s) return create_str_reply((s), strlen(s), RPLY_FAIL)
 #define string_reply(s, len) return create_str_reply((s), len, \

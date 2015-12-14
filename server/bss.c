@@ -182,6 +182,47 @@ int bss2int(const bss_t *bss, bss_int_t *result)
         return 0;
 }
 
+/* convert bss to long double
+ * return non-zero if it fails
+ */
+int bss2ld(const bss_t *bss, long double *result)
+{
+        char *end_ptr;
+
+        if(0 == bss->len) {
+                *result = 0;
+                return 0;
+        }
+
+        errno = 0;
+        *result = strtold(bss->str, &end_ptr);
+
+        if((ERANGE == errno) || ( end_ptr != (bss->str + bss->len) ) )
+                return E_INV_INT;
+
+        return 0;
+}
+
+/* regularize long double bss to the so-called standard form
+ * i.e no trailing zeros after the decimal point
+ */
+void bss_cut_zero(bss_t *bss)
+{
+        size_t i = bss->len - 1;
+        while(i > 0 && '0' == bss->str[i]) {
+                bss->len--;
+                bss->free++;
+                i--;
+        }
+
+        if('.' == bss->str[i]) {
+                bss->len--;
+                bss->free++;
+        }
+
+        bss->str[bss->len] = 0;
+}
+
 /* add a number to or subtract a number from an bss if possible.
  * will return E_INV_INT if bss is not an integer
  * --or if the operation causes an overflow.

@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <errno.h>
 #include <limits.h>
+#include <float.h>
+#include <math.h>
 
 #include "obj.h"
 #include "err.h"
@@ -17,6 +19,9 @@
 #define BSS_INT_MIN LLONG_MIN
 #define BSS_MIN_LEN 22  /* this length can hold a bss_int_t */
 #define BSS_INT_FMT "%lld"
+#define BSS_FLT_FMT "%.17Lf"
+#define BSS_LDB_PRECISION 17
+#define BSS_LDB_LEN BSS_MIN_LEN + BSS_LDB_PRECISION
 
 /* type definitions */
 struct bss{
@@ -44,6 +49,8 @@ bss_t *bss_set(bss_t *dst, const char *str, size_t len);
 int bss_cmp(const bss_t *a, const bss_t *b);
 int bss2int(const bss_t *bss, bss_int_t *result);
 int bss_add_sub(const bss_t *bss, bss_int_t num, int8_t factor);
+void bss_cut_zero(bss_t *bss);
+int bss2ld(const bss_t *bss, long double *result);
 size_t bss_count_bit(const bss_t *bss);
 bss_t *bss_append(bss_t *bss, char *data, size_t len);
 bss_t *bss_setbit(bss_t *bss, size_t offset, uint val);
