@@ -11,17 +11,23 @@ You can use this to fool your friend(say, "Hey, you know what? Redis is stupid! 
 
 
 ##supported commands
-###keys 
+
+###keys
+
 setnx del exists rename keys type randomkey(partial)
 
 ###string
+
 append getbit setbit mget bitcount incr decr incrby decrby incrbyfloat msetnx get set(partial) strlen setrange getrange
 
 ###hash
+
 hdel hlen hexists hmget hget hmset hgetall hincrby hset hsetnx hkeys hvals linsert hincrbyfloat
 
 ###list
+
 rpop llen lpop  rpush lpush rpushx lpushx lrange rpoplpush lset lindex lrem ltrim brpop brpoplpush blpop
 
-###set 
+###set
+
 scard sadd sismember smembers spop srandmember(partial) sdiff srem sunion smove sinter sscan
